@@ -1,19 +1,31 @@
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::{c_char, c_uchar};
 
-struct RustSideHandler;
+pub trait OnSend {
+    fn on_send(&mut self, src: &str, arg: &[u8]);
+}
 
-impl RustSideHandler {
-    fn on_send(&self, src: &str, arg: &[u8], arg_len: usize) {
-        println!("rust side on_send '{}' ", src, );
+pub struct UserSpaceWrapper<'a> {
+    ffi_wrapper: *mut FFIWrapper<'a>,
+}
+
+#[repr(C)]
+struct RustSideHandler<'a> {
+    h: &'a mut dyn OnSend,
+}
+
+impl<'a> RustSideHandler<'a> {
+    fn on_send(&mut self, src: &str, arg: &[u8]) {
+        println!("rust side on_send '{}' ", src,);
+        self.h.on_send(src, arg);
     }
 }
 
 #[repr(C)]
-struct FFIWrapper {
-    callback: extern "C" fn(*const RustSideHandler, *const c_char, *const c_uchar, usize),
+struct FFIWrapper<'a> {
+    callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
     self_c_side: *const c_void,
-    self_rust_side: *const RustSideHandler,
+    self_rust_side: *const RustSideHandler<'a>,
 }
 
 #[link(name = "dummy")]
@@ -26,16 +38,15 @@ extern "C" {
 }
 
 extern "C" fn handler_cb(
-    rust_obj: *const RustSideHandler,
+    rust_obj: *mut RustSideHandler,
     dest: *const c_char,
     arg: *const c_uchar,
     arg_len: usize,
 ) {
-
     unsafe {
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
-        (*rust_obj).on_send(dest.to_str().unwrap(), sl, arg_len);
+        (*rust_obj).on_send(dest.to_str().unwrap(), sl);
     }
 }
 
@@ -46,8 +57,8 @@ pub fn send_(dest: &str, data: &[u8]) {
     }
 }
 
-pub fn handler_(dest: &str) {
-    let rust_side_obj = Box::new(RustSideHandler {});
+pub fn handler_<'a>(dest: &str, handle: &'a mut impl OnSend) -> UserSpaceWrapper<'a> {
+    let rust_side_obj = Box::new(RustSideHandler { h: handle });
 
     let ffi_obj = Box::new(FFIWrapper {
         callback: handler_cb,
@@ -57,5 +68,9 @@ pub fn handler_(dest: &str) {
 
     let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
     let dest = CString::new(dest).unwrap();
-    unsafe { handler(dest.as_ptr(), ffi_obj) }
+    unsafe { handler(dest.as_ptr(), ffi_obj) };
+
+    UserSpaceWrapper {
+        ffi_wrapper: ffi_obj,
+    }
 }
