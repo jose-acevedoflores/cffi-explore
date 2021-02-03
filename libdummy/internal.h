@@ -12,6 +12,7 @@ class InternalHandler {
 
     ~InternalHandler(){
         std::cout << "~InternalHandler() destroyed" <<std::endl;
+        this->p->selfCSide = nullptr;
     }
 
     void onSend(const std::string& src, const char* arg, size_t argLen){

@@ -17,6 +17,7 @@ class MyLibrary {
    void start();
    void send(const std::string& dest, const char* arg, size_t argLen);
    void handle(const std::string& dest, InternalHandler * internal_handler);
+   void cancel(const std::string& dest, InternalHandler * internal_handler);
 };
 
 
@@ -49,6 +50,17 @@ void MyLibrary::handle(const std::string& dest, InternalHandler * internal_handl
     handlers.emplace(dest, internal_handler);
 }
 
+void MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
+    std::cout << "C side cancel " << dest << std::endl;
+    auto search = handlers.find(dest);
+    if(search != handlers.end()){
+        delete search->second;
+    } else {
+        std::cout << "handler for "<<dest << " was not found" << std::endl;
+    }
+
+}
+
 
 void MyLibrary::incr() {
     i = 0;
@@ -75,6 +87,12 @@ void handler(const char* dest, Wrapper* p){
     p->selfCSide = handler;
     lib->handle(s, handler);
 
+}
+
+void cancel(const char * dest, Wrapper *p) {
+    auto s = std::string(dest);
+    auto h = (InternalHandler*) p->selfCSide;
+    lib->cancel(s, h);
 }
 
 ///////////////

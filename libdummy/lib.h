@@ -21,6 +21,7 @@ extern "C"
 
     void send(const char* dest, const char* arg, size_t argLen);
     void handler(const char* dest, Wrapper* p);
+    void cancel(const char* dest, Wrapper* p);
 
 #ifdef __cplusplus
 } // extern "C"

@@ -5,27 +5,30 @@ pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
 }
 
-pub struct UserSpaceWrapper<'a> {
-    ffi_wrapper: *mut FFIWrapper<'a>,
+pub struct UserSpaceWrapper {
+    ffi_wrapper: *mut FFIWrapper,
 }
 
 #[repr(C)]
-struct RustSideHandler<'a> {
-    h: &'a mut dyn OnSend,
+struct RustSideHandler {
+    h: *mut dyn OnSend,
 }
 
-impl<'a> RustSideHandler<'a> {
+impl RustSideHandler {
     fn on_send(&mut self, src: &str, arg: &[u8]) {
         println!("rust side on_send '{}' ", src,);
-        self.h.on_send(src, arg);
+        unsafe {
+            let mut h: Box<dyn OnSend> = std::boxed::Box::from_raw(self.h);
+            h.as_mut().on_send(src, arg);
+        }
     }
 }
 
 #[repr(C)]
-struct FFIWrapper<'a> {
+struct FFIWrapper {
     callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
     self_c_side: *const c_void,
-    self_rust_side: *const RustSideHandler<'a>,
+    self_rust_side: *mut RustSideHandler,
 }
 
 #[link(name = "dummy")]
@@ -35,6 +38,7 @@ extern "C" {
     // void handler(const std::string& dest, Wrapper* p);
     fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize);
     fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper);
+    fn cancel(dest: *const c_char, ffi_obj: *mut FFIWrapper);
 }
 
 extern "C" fn handler_cb(
@@ -46,6 +50,7 @@ extern "C" fn handler_cb(
     unsafe {
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
+        // TODO should it do from_raw on the rust_obj since it was a Box ?
         (*rust_obj).on_send(dest.to_str().unwrap(), sl);
     }
 }
@@ -57,7 +62,8 @@ pub fn send_(dest: &str, data: &[u8]) {
     }
 }
 
-pub fn handler_<'a>(dest: &str, handle: &'a mut impl OnSend) -> UserSpaceWrapper<'a> {
+pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
+    let handle = std::boxed::Box::into_raw(handle);
     let rust_side_obj = Box::new(RustSideHandler { h: handle });
 
     let ffi_obj = Box::new(FFIWrapper {
@@ -68,9 +74,20 @@ pub fn handler_<'a>(dest: &str, handle: &'a mut impl OnSend) -> UserSpaceWrapper
 
     let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
     let dest = CString::new(dest).unwrap();
-    unsafe { handler(dest.as_ptr(), ffi_obj) };
+    unsafe {
+        handler(dest.as_ptr(), ffi_obj);
+    };
 
     UserSpaceWrapper {
         ffi_wrapper: ffi_obj,
     }
+}
+
+
+pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) {
+
+    let dest = CString::new(dest).unwrap();
+    unsafe {
+        cancel(dest.as_ptr(), user_wrapper.ffi_wrapper);
+    };
 }
