@@ -15,9 +15,9 @@ class MyLibrary {
    void incr();
  public:
    void start();
-   void send(const std::string& dest, const char* arg, size_t argLen);
-   void handle(const std::string& dest, InternalHandler * internal_handler);
-   void cancel(const std::string& dest, InternalHandler * internal_handler);
+   int send(const std::string& dest, const char* arg, size_t argLen);
+   int handle(const std::string& dest, InternalHandler * internal_handler);
+   int cancel(const std::string& dest, InternalHandler * internal_handler);
 };
 
 
@@ -34,29 +34,34 @@ void MyLibrary::start() {
     handlers = std::map<std::string, InternalHandler*> ();
 }
 
-void MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
+int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     std::cout << "C side send " << dest << std::endl;
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
+        return 0;
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
+        return -1;
     }
 }
 
 
-void MyLibrary::handle(const std::string& dest, InternalHandler * internal_handler ){
+int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side handle " << dest << std::endl;
     handlers.emplace(dest, internal_handler);
+    return 0;
 }
 
-void MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
+int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side cancel " << dest << std::endl;
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         delete search->second;
+        return 0;
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
+        return -1;
     }
 
 }
@@ -76,23 +81,23 @@ auto lib = new MyLibrary();
 
 /////////// Externs
 
-void send(const char* dest, const char* arg, size_t argLen){
+int send(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
-    lib->send(s, arg, argLen);
+    return lib->send(s, arg, argLen);
 }
 
-void handler(const char* dest, Wrapper* p){
+void* handler(const char* dest, FFIWrapper* p){
     auto s = std::string(dest);
     auto handler = new InternalHandler(p);
-    p->selfCSide = handler;
-    lib->handle(s, handler);
+    int res = lib->handle(s, handler);
 
+    return res >=0 ?  handler : nullptr;
 }
 
-void cancel(const char * dest, Wrapper *p) {
+int cancel(const char * dest, void *p) {
     auto s = std::string(dest);
-    auto h = (InternalHandler*) p->selfCSide;
-    lib->cancel(s, h);
+    auto h = (InternalHandler*) p;
+    return lib->cancel(s, h);
 }
 
 ///////////////

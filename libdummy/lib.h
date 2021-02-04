@@ -5,10 +5,13 @@
 
 
 typedef void (*callback_t)(void*, const char* dest, const char*, size_t);
-struct Wrapper {
+typedef void* FFICtx;
+struct FFIWrapper {
+    /**
+     * first argument of this cb will be 'cbSelf'
+     */
     callback_t cb;
-    void * selfCSide;
-    void * outerSelf;
+    void * cbSelf;
 };
 
 
@@ -19,9 +22,9 @@ extern "C"
 {
 #endif
 
-    void send(const char* dest, const char* arg, size_t argLen);
-    void handler(const char* dest, Wrapper* p);
-    void cancel(const char* dest, Wrapper* p);
+    int send(const char* dest, const char* arg, size_t argLen);
+    FFICtx handler(const char* dest, FFIWrapper* p);
+    int cancel(const char* dest, FFICtx p);
 
 #ifdef __cplusplus
 } // extern "C"

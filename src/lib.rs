@@ -1,5 +1,5 @@
-use std::ffi::{c_void, CStr, CString};
-use std::os::raw::{c_char, c_uchar};
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_uchar, c_int};
 
 pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
@@ -7,6 +7,7 @@ pub trait OnSend {
 
 pub struct UserSpaceWrapper {
     ffi_wrapper: *mut FFIWrapper,
+    ctx: *const FFICtx,
 }
 
 #[repr(C)]
@@ -24,21 +25,22 @@ impl RustSideHandler {
     }
 }
 
+//TODO simplify with the C changes
 #[repr(C)]
 struct FFIWrapper {
     callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
-    self_c_side: *const c_void,
     self_rust_side: *mut RustSideHandler,
 }
+
+#[repr(C)]
+pub struct FFICtx { _private: [u8; 0] }
 
 #[link(name = "dummy")]
 extern "C" {
 
-    // void send(const std::string& dest, const char* arg, size_t argLen);
-    // void handler(const std::string& dest, Wrapper* p);
-    fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize);
-    fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper);
-    fn cancel(dest: *const c_char, ffi_obj: *mut FFIWrapper);
+    fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
+    fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
+    fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
 }
 
 extern "C" fn handler_cb(
@@ -55,11 +57,13 @@ extern "C" fn handler_cb(
     }
 }
 
-pub fn send_(dest: &str, data: &[u8]) {
+pub fn send_(dest: &str, data: &[u8]) -> bool {
     let dest = CString::new(dest).unwrap();
-    unsafe {
-        send(dest.as_ptr(), data.as_ptr(), data.len());
-    }
+    let res = unsafe {
+        send(dest.as_ptr(), data.as_ptr(), data.len())
+    };
+
+    res >= 0
 }
 
 pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
@@ -68,26 +72,28 @@ pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
 
     let ffi_obj = Box::new(FFIWrapper {
         callback: handler_cb,
-        self_c_side: std::ptr::null(),
         self_rust_side: std::boxed::Box::into_raw(rust_side_obj),
     });
 
     let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
     let dest = CString::new(dest).unwrap();
-    unsafe {
-        handler(dest.as_ptr(), ffi_obj);
+    let ctx = unsafe {
+        handler(dest.as_ptr(), ffi_obj)
     };
 
     UserSpaceWrapper {
         ffi_wrapper: ffi_obj,
+        ctx
     }
 }
 
 
-pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) {
+pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
 
     let dest = CString::new(dest).unwrap();
-    unsafe {
-        cancel(dest.as_ptr(), user_wrapper.ffi_wrapper);
+    let res = unsafe {
+        cancel(dest.as_ptr(), user_wrapper.ctx)
     };
+
+    res >=0
 }

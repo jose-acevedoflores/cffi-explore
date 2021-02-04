@@ -4,20 +4,19 @@
 
 ////////// ASYNC CB test
 class InternalHandler {
-    Wrapper *p;
+    FFIWrapper *p;
  public:
-    InternalHandler(Wrapper *p) {
+    InternalHandler(FFIWrapper *p) {
         this->p = p;
     };
 
     ~InternalHandler(){
         std::cout << "~InternalHandler() destroyed" <<std::endl;
-        this->p->selfCSide = nullptr;
     }
 
     void onSend(const std::string& src, const char* arg, size_t argLen){
         std::cout << "C side onSend " << src << std::endl;
-        p->cb(p->outerSelf, src.c_str(), arg, argLen);
+        p->cb(p->cbSelf, src.c_str(), arg, argLen);
     }
 };
 
