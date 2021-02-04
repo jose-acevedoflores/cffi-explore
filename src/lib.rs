@@ -5,6 +5,8 @@ pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
 }
 
+//Allow dead code since both ptrs are only used by the C side
+#[allow(dead_code)]
 pub struct UserSpaceWrapper {
     ffi_wrapper: *mut FFIWrapper,
     ctx: *const FFICtx,
@@ -12,20 +14,10 @@ pub struct UserSpaceWrapper {
 
 #[repr(C)]
 struct RustSideHandler {
-    h: *mut dyn OnSend,
+    opaque: *mut dyn OnSend,
 }
 
-impl RustSideHandler {
-    fn on_send(&mut self, src: &str, arg: &[u8]) {
-        println!("rust side on_send '{}' ", src,);
-        unsafe {
-            let mut h: Box<dyn OnSend> = std::boxed::Box::from_raw(self.h);
-            h.as_mut().on_send(src, arg);
-        }
-    }
-}
 
-//TODO simplify with the C changes
 #[repr(C)]
 struct FFIWrapper {
     callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
@@ -53,7 +45,9 @@ extern "C" fn handler_cb(
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
         // TODO should it do from_raw on the rust_obj since it was a Box ?
-        (*rust_obj).on_send(dest.to_str().unwrap(), sl);
+        // let mut bv = std::boxed::Box::from_raw(rust_obj);
+        let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
+        bv.as_mut().on_send(dest.to_str().unwrap(), sl);
     }
 }
 
@@ -68,7 +62,7 @@ pub fn send_(dest: &str, data: &[u8]) -> bool {
 
 pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
     let handle = std::boxed::Box::into_raw(handle);
-    let rust_side_obj = Box::new(RustSideHandler { h: handle });
+    let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
 
     let ffi_obj = Box::new(FFIWrapper {
         callback: handler_cb,
