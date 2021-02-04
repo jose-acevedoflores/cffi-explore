@@ -57,13 +57,18 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
     std::cout << "C side cancel " << dest << std::endl;
     auto search = handlers.find(dest);
     if(search != handlers.end()){
-        delete search->second;
-        return 0;
+        if(search->second == internal_handler){
+            delete search->second;
+            return 0;
+        } else {
+            std::cout << "wrong internal_handler " << std::endl;
+        }
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
-        return -1;
     }
 
+    //TODO it should probably destroy 'internal_handler' anyway otherwise there could be memory leak.
+    return -1;
 }
 
 

@@ -12,6 +12,13 @@ pub struct UserSpaceWrapper {
     ctx: *const FFICtx,
 }
 
+impl Drop for UserSpaceWrapper {
+    fn drop(&mut self) {
+        println!("free ffi_wrapper, ctx freed by c side");
+        //TODO proper free
+    }
+}
+
 #[repr(C)]
 struct RustSideHandler {
     opaque: *mut dyn OnSend,
