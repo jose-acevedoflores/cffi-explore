@@ -2,9 +2,10 @@
 
 
 This project is a `rust` wrapper around a hypothetical `c++` library
-(see [libdummy](libdummy/README.md]) ) that exposes a `C` abi.
+(see [libdummy](libdummy/README.md) ) that exposes a `C` abi.
 The goal of this repo is to document/explore how to write such a `rust` wrapper 
-from the perspective of someone not only new to `rust`, but new to writing low level code.
+from the perspective of someone not only new to `rust`, but new to writing
+non garbage collected code in general.
 
 
 
