@@ -1,7 +1,7 @@
 use cffi_explore;
-use std::{thread, time};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::{thread, time};
 
 struct UserSpaceHandler {
     v: Rc<RefCell<Option<String>>>,
@@ -17,10 +17,8 @@ impl cffi_explore::OnSend for UserSpaceHandler {
 
 fn main() {
     let d = Rc::new(RefCell::new(None));
-    let user = Box::new(UserSpaceHandler {
-        v: Rc::clone(&d),
-    });
-    let h = cffi_explore::handler_("here",  user);
+    let user = Box::new(UserSpaceHandler { v: Rc::clone(&d) });
+    let h = cffi_explore::handler_("here", user);
 
     let s = String::from("ledata to send");
     cffi_explore::send_("here", s.as_bytes());

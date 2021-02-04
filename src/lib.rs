@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_uchar, c_int};
+use std::os::raw::{c_char, c_int, c_uchar};
 
 pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
@@ -17,7 +17,6 @@ struct RustSideHandler {
     opaque: *mut dyn OnSend,
 }
 
-
 #[repr(C)]
 struct FFIWrapper {
     callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
@@ -25,7 +24,9 @@ struct FFIWrapper {
 }
 
 #[repr(C)]
-pub struct FFICtx { _private: [u8; 0] }
+pub struct FFICtx {
+    _private: [u8; 0],
+}
 
 #[link(name = "dummy")]
 extern "C" {
@@ -53,9 +54,7 @@ extern "C" fn handler_cb(
 
 pub fn send_(dest: &str, data: &[u8]) -> bool {
     let dest = CString::new(dest).unwrap();
-    let res = unsafe {
-        send(dest.as_ptr(), data.as_ptr(), data.len())
-    };
+    let res = unsafe { send(dest.as_ptr(), data.as_ptr(), data.len()) };
 
     res >= 0
 }
@@ -71,23 +70,17 @@ pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
 
     let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
     let dest = CString::new(dest).unwrap();
-    let ctx = unsafe {
-        handler(dest.as_ptr(), ffi_obj)
-    };
+    let ctx = unsafe { handler(dest.as_ptr(), ffi_obj) };
 
     UserSpaceWrapper {
         ffi_wrapper: ffi_obj,
-        ctx
+        ctx,
     }
 }
 
-
 pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
-
     let dest = CString::new(dest).unwrap();
-    let res = unsafe {
-        cancel(dest.as_ptr(), user_wrapper.ctx)
-    };
+    let res = unsafe { cancel(dest.as_ptr(), user_wrapper.ctx) };
 
-    res >=0
+    res >= 0
 }
