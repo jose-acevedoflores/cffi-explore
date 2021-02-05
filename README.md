@@ -30,7 +30,7 @@ The code looked like this
 ```rust
 #[link(name = "dummy")]
 extern "C" {
-    fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
+    fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
 }
 
 #[repr(C)]
@@ -48,7 +48,8 @@ extern "C" fn handler_cb(
     unsafe {
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
-        println!("Fat ptr passed to callback: {:?}", unsafe { transmute::<_, (usize, usize)>(rust_obj) });
+        println!("Fat ptr passed to callback: {:?}",
+                 unsafe { transmute::<_, (usize, usize)>(rust_obj) });
 
         let mut bv = std::boxed::Box::from_raw(rust_obj);
         bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <--- SEGFAULTS HERE
@@ -84,14 +85,15 @@ The Box is then rebuilt, and I try to invoke the on_send aaannddd... :boom::boom
 After banging my head for a bit I stumbled upon
 [this article](https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/)
 which gives an insight to rust fat pointers. If I understood correctly, `dyn Traits` are
-DSTs so they are represented by fat pointers (16 bytes vs 8 bytes in 64bit machine).
+DSTs so they are represented by fat pointers (16 bytes vs 8 bytes in a 64bit machine).
 The first 8 bytes are the data ptr and the next 8 bytes point to the vtable.
 With the code above, if you do a `transmute` on the `*mut dyn OnSend` before and after you get
 ```shell
+                 (    data ptr   , vtable ptr)
 Original fat ptr:(140314899668256, 4431298656)
 C side handle here
 C side send here
-C side onSend here
+C side onSend here          (    data ptr   ,   vtable ptr   )
 Fat ptr passed to callback: (140314899668256, 140732784668465)
 
 ```
@@ -100,8 +102,8 @@ Some more digging and I read somewhere that arguments for `extern "C"` functions
 are passed via registers. I believe that is why I loose the vtable ptr in transit
 since I only get the first 8 bytes.
 
-To fix it, I just the `*mut dyn OnSend` a plain struct with `#[repr(C)]` and passed that around.
-Now the code looks more like:
+To fix it, I just wrapped the `*mut dyn OnSend` a plain struct with `#[repr(C)]`
+and passed that around. Now the code looks more like:
 ```rust
 #[repr(C)]
 struct RustSideHandler {
@@ -126,7 +128,8 @@ extern "C" fn handler_cb(
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
 
-        println!("Fat ptr passed to callback: {:?}", unsafe { transmute::<_, (usize, usize)>((*rust_obj).opaque) });
+        println!("Fat ptr passed to callback: {:?}",
+                 unsafe { transmute::<_, (usize, usize)>((*rust_obj).opaque) });
 
         let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
         bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <-- happy now
@@ -150,5 +153,5 @@ Fat ptr passed to callback: (140362144308512, 4348330080)
 YAY :see_no_evil:
 
 Bottom line, avoid passing fat pointers on extern calls OR maybe this whole thing
-of passing a *mut dyn OnSend is a bad idea. I figured that shouldn't be that bad for
+of passing a `*mut dyn OnSend` is a bad idea. I figured that shouldn't be that bad for
 my use case since that `RustSideHandler` struct will NOT be accessed on the library side.
