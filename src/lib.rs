@@ -91,3 +91,17 @@ pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
 
     res >= 0
 }
+
+
+#[cfg(test)]
+mod tests{
+    use std::mem::size_of;
+    use crate::OnSend;
+
+    #[test]
+    fn fat_ptr(){
+
+        // So, this is a fat pointer.
+        dbg!(size_of::<*mut dyn OnSend>());
+    }
+}
