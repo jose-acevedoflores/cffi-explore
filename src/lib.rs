@@ -101,6 +101,7 @@ mod tests{
     #[test]
     fn fat_ptr(){
 
+        // https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/
         // So, this is a fat pointer.
         dbg!(size_of::<*mut dyn OnSend>());
     }
