@@ -105,6 +105,7 @@ since I only get the first 8 bytes.
 To fix it, I just wrapped the `*mut dyn OnSend` a plain struct with `#[repr(C)]`
 and passed that around. Now the code looks more like:
 ```rust
+//New struct that stores the fat pointer
 #[repr(C)]
 struct RustSideHandler {
     opaque: *mut dyn OnSend,
