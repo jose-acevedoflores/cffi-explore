@@ -21,12 +21,6 @@ class MyLibrary {
 };
 
 
-//void MyLibrary::register_cb(Wrapper *p) {
-//
-//    this->p = p;
-//    this->p->cb(this->p->self, 89);
-//}
-
 
 void MyLibrary::start() {
     //Start thread

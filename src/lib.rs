@@ -98,8 +98,21 @@ pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
 
 #[cfg(test)]
 mod tests{
-    use std::mem::size_of;
+    use std::mem::{size_of, transmute};
     use crate::OnSend;
+
+    struct TestStruct;
+    impl OnSend for TestStruct {
+        fn on_send(&mut self, _src: &str, _arg: &[u8]) {
+            unimplemented!()
+        }
+    }
+    struct TestStruct2;
+    impl OnSend for TestStruct2 {
+        fn on_send(&mut self, _src: &str, _arg: &[u8]) {
+            unimplemented!()
+        }
+    }
 
     #[test]
     fn fat_ptr(){
@@ -107,5 +120,18 @@ mod tests{
         // https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/
         // So, this is a fat pointer.
         dbg!(size_of::<*mut dyn OnSend>());
+
+        let handle: Box<dyn OnSend> = Box::new(TestStruct{});
+        let handle = std::boxed::Box::into_raw(handle);
+
+        dbg!(unsafe { transmute::<_, (usize, usize)>(handle) });
+        dbg!(handle);
+
+        let handle2: Box<dyn OnSend> = Box::new(TestStruct2{});
+        let handle2 = std::boxed::Box::into_raw(handle2);
+
+        dbg!(unsafe { transmute::<_, (usize, usize)>(handle2) });
+        dbg!(handle2);
+
     }
 }
