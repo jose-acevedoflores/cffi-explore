@@ -44,6 +44,11 @@ extern "C"
      */
     int cancel(const char* dest, FFICtx ctx);
 
+    /*
+        Shutdowns the library, after this call all library calls are invalid.
+     */
+    void shutdown();
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

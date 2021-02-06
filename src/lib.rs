@@ -41,6 +41,7 @@ extern "C" {
     fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
     fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
     fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
+    fn shutdown();
 }
 
 extern "C" fn handler_cb(
@@ -91,10 +92,25 @@ pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper {
 pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
     let dest = CString::new(dest).unwrap();
     let res = unsafe { cancel(dest.as_ptr(), user_wrapper.ctx) };
-
+    unsafe {
+        //Important!
+        // To free all resources held by the FFIWrapper struct we need to:
+        //   - Rebuild the Box<FFIWrapper>
+        //   - Rebuild the Box<RustSideHandler> held inside the FFIWrapper
+        //   - Rebuild the Box<dyn OnSend> held inside the RustSideHandler
+        // all these boxes will be dropped here, freeing the resources.
+        let ffi_obj_to_drop = std::boxed::Box::from_raw(user_wrapper.ffi_wrapper);
+        let self_rust_side_to_drop = std::boxed::Box::from_raw(ffi_obj_to_drop.self_rust_side);
+        std::boxed::Box::from_raw(self_rust_side_to_drop.opaque);
+    }
     res >= 0
 }
 
+pub fn shutdown_(){
+    unsafe {
+        shutdown()
+    }
+}
 
 #[cfg(test)]
 mod tests{

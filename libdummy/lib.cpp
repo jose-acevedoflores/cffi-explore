@@ -99,14 +99,21 @@ int cancel(const char * dest, void *ctx) {
     return lib->cancel(s, h);
 }
 
+void shutdown(){
+    std::cout << "Shutdown libdummy" << std::endl;
+    delete lib;
+}
+
 ///////////////
 
 
 /*
 
-   //build .so
+   //build .so (MAC)
    g++ -shared -std=c++14 -o libdummy.so lib.cpp -lc
 
+   //build .so (linux)
+   g++ -shared -std=c++14 -o libdummy.so lib.cpp -lc -fPIC
 
    https://nachtimwald.com/2017/08/18/wrapping-c-objects-in-c/
 

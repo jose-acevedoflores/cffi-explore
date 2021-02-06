@@ -30,4 +30,5 @@ fn main() {
     thread::sleep(two_secs);
     cffi_explore::cancel_("here", h);
     thread::sleep(two_secs);
+    cffi_explore::shutdown_();
 }
