@@ -39,6 +39,9 @@ pub struct FFICtx {
 extern "C" {
 
     fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
+    //NOTE: FFIWrapper includes a struct that has a trait object BUT it is not meant to be
+    //      accessed by the c side so it should be sage.
+    #[allow(improper_ctypes)]
     fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
     fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
     fn shutdown();
@@ -53,13 +56,7 @@ extern "C" fn handler_cb(
     unsafe {
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
-        let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
-        bv.as_mut().on_send(dest.to_str().unwrap(), sl);
-
-        //This is important!!
-        // If we let the bv box go out of scope it will free the contained 'dyn OnSend'
-        // and next time it will double free and segfault.
-        std::boxed::Box::into_raw(bv);
+        (*(*rust_obj).opaque).on_send(dest.to_str().unwrap(), sl);
     }
 }
 

@@ -1,15 +1,17 @@
 ## Passing dyn trait through ffi
 
 
-I liked the idea of providing a Trait object (`OnSend`) to the
-`handler_(dest: &str, handle: Box<dyn OnSend>) ...` function
-instead of a concrete struct, so the users of the library could just provide an arbitrary struct
-that satisfies the bound (or maybe I'm pigeonholed in java).
+One of my goals for this library was to expose to the user a `handler` method that
+could accept a struct as long as it implemented a specific method that would be used
+as a callback by the `c` side of the library. I liked the
+idea of having a function signature like `handler_(dest: &str, handle: Box<dyn OnSend>) ...`
+so the users could define their own structs and just respond to
+callbacks from the `c` side via their implementation of that `OnSend` trait.
 
 Where I ran into trouble was when I tried passing the resulting
 `*mut dyn OnSend` down to the `c` side and back through the `extern "C" fn handler_cb`
 
-The code looked like this
+The code looked like this:
 ```rust
 #[link(name = "dummy")]
 extern "C" {
@@ -18,6 +20,7 @@ extern "C" {
 
 #[repr(C)]
 struct FFIWrapper {
+    // SEE HERE how the *mut dyn OnSend is passed back from c via this callback
     callback: extern "C" fn(*mut dyn OnSend, *const c_char, *const c_uchar, usize),
     self_rust_side: *mut dyn OnSend,
 }
@@ -34,8 +37,7 @@ extern "C" fn handler_cb(
         println!("Fat ptr passed to callback: {:?}",
                  unsafe { transmute::<_, (usize, usize)>(rust_obj) });
 
-        let mut bv = std::boxed::Box::from_raw(rust_obj);
-        bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <--- SEGFAULTS HERE
+        (*rust_obj).on_send(dest.to_str().unwrap(), sl); // <--- SEGFAULTS HERE
         // ....
     }
 }
@@ -69,9 +71,9 @@ The Box is then rebuilt, and I try to invoke the on_send aaannddd... :boom::boom
 After banging my head for a bit I stumbled upon
 [this article](https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/)
 which gives an insight to rust fat pointers. If I understood correctly, `dyn Traits` are
-DSTs so they are represented by fat pointers (16 bytes vs 8 bytes in a 64bit machine).
+DSTs so they are represented by fat pointers (16 bytes ptr vs 8 bytes ptr in a 64bit machine).
 The first 8 bytes are the data ptr and the next 8 bytes point to the vtable.
-With the code above, if you do a `transmute` on the `*mut dyn OnSend` before and after you get
+With the code above, if you do a `transmute` on the `*mut dyn OnSend` before and after you get:
 ```shell
                  (    data ptr   , vtable ptr)
 Original fat ptr:(140314899668256, 4431298656)
@@ -86,12 +88,16 @@ Some more digging and I read somewhere that arguments for `extern "C"` functions
 are passed via registers. I believe that is why I loose the vtable ptr in transit
 since I only get the first 8 bytes.
 
-To fix it, I just wrapped the `*mut dyn OnSend` a plain struct with `#[repr(C)]`
-and passed that around. Now the code looks more like:
+To fix it, I just wrapped the `*mut dyn OnSend` ptr in a plain struct with `#[repr(C)]`
+and passed that around. This introduces another level of indirection and a
+`*mut RustSideHandler` will be just 8 bytes which should be safe to pass through ffi.
+
+Now the code looks more like:
 ```rust
 //New struct that stores the fat pointer
 #[repr(C)]
 struct RustSideHandler {
+    //NOTE: this field IS NOT intended to be accessed on the 'c' side
     opaque: *mut dyn OnSend,
 }
 
@@ -116,12 +122,7 @@ extern "C" fn handler_cb(
         println!("Fat ptr passed to callback: {:?}",
                  unsafe { transmute::<_, (usize, usize)>((*rust_obj).opaque) });
 
-        let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
-        bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <-- happy now
-        //This is important!!
-        // If we let the box 'bv' go out of scope it will free the contained 'dyn OnSend'
-        // and next time it gets here, it will double free and segfault.
-        std::boxed::Box::into_raw(bv);
+        (*(*rust_obj).opaque).on_send(dest.to_str().unwrap(), sl); // <-- NO SEGFAULT now
     }
 }
 
@@ -131,7 +132,7 @@ pub fn handler_(dest: &str, handle: Box<dyn OnSend>) -> UserSpaceWrapper { /*hid
     // now builds a RustSideHandler and places handle that inside the FFIWrapper
 
 ```
-The output of the new code looked like
+The output of the new code looked like:
 ```shell
 Original fat ptr:(140362144308512, 4348330080)
 C side handle here
@@ -139,8 +140,10 @@ C side send here
 C side onSend here
 Fat ptr passed to callback: (140362144308512, 4348330080)
 ```
-YAY :see_no_evil:
+SUCCESS :see_no_evil:
 
-Bottom line, avoid passing fat pointers on extern calls OR maybe this whole thing
-of passing a `*mut dyn OnSend` is a bad idea. I figured that shouldn't be that bad for
-my use case since that `RustSideHandler` struct will NOT be accessed on the library side.
+Bottom line is, it seems that passing fat pointers straight through extern calls will not work
+due to the nature of how arguments are passed in the "C" abi.
+I also thought that, maybe this whole thing of passing a trait Object is a bad idea; but
+I figured, that shouldn't be that bad for my use case since that `RustSideHandler`
+struct will NOT be accessed on the library side.
