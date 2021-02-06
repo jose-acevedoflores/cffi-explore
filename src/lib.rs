@@ -52,10 +52,13 @@ extern "C" fn handler_cb(
     unsafe {
         let dest = CStr::from_ptr(dest);
         let sl = std::slice::from_raw_parts(arg, arg_len);
-        // TODO should it do from_raw on the rust_obj since it was a Box ?
-        // let mut bv = std::boxed::Box::from_raw(rust_obj);
         let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
         bv.as_mut().on_send(dest.to_str().unwrap(), sl);
+
+        //This is important!!
+        // If we let the bv box go out of scope it will free the contained 'dyn OnSend'
+        // and next time it will double free and segfault.
+        std::boxed::Box::into_raw(bv);
     }
 }
 

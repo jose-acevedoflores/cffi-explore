@@ -25,6 +25,9 @@ fn main() {
     println!("We got it {:?}", &d);
     let two_secs = time::Duration::from_secs(2);
     thread::sleep(two_secs);
+    cffi_explore::send_("here", "another one".as_bytes());
+    println!("We got it {:?}", &d);
+    thread::sleep(two_secs);
     cffi_explore::cancel_("here", h);
     thread::sleep(two_secs);
 }

@@ -53,6 +53,7 @@ extern "C" fn handler_cb(
 
         let mut bv = std::boxed::Box::from_raw(rust_obj);
         bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <--- SEGFAULTS HERE
+        // ....
     }
 }
 
@@ -134,6 +135,10 @@ extern "C" fn handler_cb(
 
         let mut bv = std::boxed::Box::from_raw((*rust_obj).opaque);
         bv.as_mut().on_send(dest.to_str().unwrap(), sl); // <-- happy now
+        //This is important!!
+        // If we let the box 'bv' go out of scope it will free the contained 'dyn OnSend'
+        // and next time it gets here, it will double free and segfault.
+        std::boxed::Box::into_raw(bv);
     }
 }
 
