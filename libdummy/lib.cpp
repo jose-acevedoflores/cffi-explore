@@ -91,17 +91,17 @@ int send(const char* dest, const char* arg, size_t argLen){
     return lib->send(s, arg, argLen);
 }
 
-void* handler(const char* dest, FFIWrapper* p){
+void* handler(const char* dest, FFIWrapper* ext_handler){
     auto s = std::string(dest);
-    auto handler = new InternalHandler(p);
+    auto handler = new InternalHandler(ext_handler);
     int res = lib->handle(s, handler);
 
     return res >=0 ?  handler : nullptr;
 }
 
-int cancel(const char * dest, void *p) {
+int cancel(const char * dest, void *ctx) {
     auto s = std::string(dest);
-    auto h = (InternalHandler*) p;
+    auto h = (InternalHandler*) ctx;
     return lib->cancel(s, h);
 }
 
