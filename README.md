@@ -20,3 +20,4 @@ is ... manual :scream:
 
 - [Passing dyn Trait through ffi](notes/fatptr_through_ffi.md)
 - [Memory leaks](notes/free_mem.md)
+- [Threading](notes/threading.md)

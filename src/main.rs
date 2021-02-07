@@ -27,7 +27,11 @@ fn main() {
     thread::sleep(two_secs);
     cffi_explore::send_("here", "another one".as_bytes());
     println!("We got it {:?}", &d);
-    thread::sleep(two_secs);
+    let mut count = 0;
+    while count < 2 {
+        count+= 1;
+        thread::sleep(two_secs);
+    }
     cffi_explore::cancel_("here", h);
     thread::sleep(two_secs);
     cffi_explore::shutdown_();

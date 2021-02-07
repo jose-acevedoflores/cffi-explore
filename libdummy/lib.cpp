@@ -4,28 +4,34 @@
 #include <chrono>
 #include <map>
 #include "internal.h"
-
+#include <vector>
 
 
 ////////// ASYNC CB test
 class MyLibrary {
-   std::thread t;
-   int i;
    std::map<std::string, InternalHandler*> handlers;
-   void incr();
+//   std::vector<std::thread> ths;
+   void incr(InternalHandler * h, const std::string dest);
  public:
-   void start();
+   ~MyLibrary();
+
+   void start(InternalHandler * h, const std::string& dest);
    int send(const std::string& dest, const char* arg, size_t argLen);
    int handle(const std::string& dest, InternalHandler * internal_handler);
    int cancel(const std::string& dest, InternalHandler * internal_handler);
 };
 
+MyLibrary::~MyLibrary() {
+    std::cout<< "lib destroyed" <<std::endl;
+}
 
-
-void MyLibrary::start() {
+void MyLibrary::start(InternalHandler * h, const std::string& dest) {
     //Start thread
-    t = std::thread(&MyLibrary::incr, this);
-    handlers = std::map<std::string, InternalHandler*> ();
+    auto copy = std::string(dest);
+    //I think I'm doing this std::move right ?
+    auto t = std::thread(&MyLibrary::incr, this, h, std::move(copy));
+//  ths.push_back(std::move(t));
+    t.detach();
 }
 
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
@@ -33,6 +39,7 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
+        start(search->second, dest);
         return 0;
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
@@ -53,6 +60,7 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
     if(search != handlers.end()){
         if(search->second == internal_handler){
             delete search->second;
+            handlers.erase(dest);
             return 0;
         } else {
             std::cout << "wrong internal_handler " << std::endl;
@@ -66,13 +74,23 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
 }
 
 
-void MyLibrary::incr() {
-    i = 0;
-    while(true){
-        i++;
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-//        this->p->cb(this->p->self, i);
-        std::cout<< "ON THE C SIDE " << i << "\n\n\n";
+void MyLibrary::incr(InternalHandler * h, const std::string dest) {
+    int b = 0;
+    auto rec = std::string("recurrent from c side: ");
+    while( b < 20){
+        b++;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        auto i = std::to_string(b);
+        rec.append(i);
+        std::cout<< "ON THE C SIDE loop " << rec << std::endl;
+        if(this->handlers.find(dest) != this->handlers.end()){
+            //NOTE: this is NOT SAFE since between checking the handlers and calling onSend the handler could be canceled
+            //     But this is test code so we good.
+            h->onSend(dest, rec.c_str(), rec.length());
+        } else {
+            std::cout<< "ON THE C SIDE loop '" << dest <<"' removed" << std::endl;
+            return;
+        }
     }
 }
 
