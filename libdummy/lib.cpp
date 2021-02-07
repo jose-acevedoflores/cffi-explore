@@ -5,11 +5,14 @@
 #include <map>
 #include "internal.h"
 #include <vector>
+#include <mutex>
 
+std::mutex g_display_mutex;
 
 ////////// ASYNC CB test
 class MyLibrary {
    std::map<std::string, InternalHandler*> handlers;
+   std::mutex handlers_mutex;
 //   std::vector<std::thread> ths;
    void incr(InternalHandler * h, const std::string dest);
  public:
@@ -36,6 +39,9 @@ void MyLibrary::start(InternalHandler * h, const std::string& dest) {
 
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     std::cout << "C side send " << dest << std::endl;
+
+    //Lock before accessing handlers map
+    std::lock_guard<std::mutex> guard(handlers_mutex);
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
@@ -50,12 +56,16 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
 
 int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side handle " << dest << std::endl;
+    std::lock_guard<std::mutex> guard(handlers_mutex);
     handlers.emplace(dest, internal_handler);
     return 0;
 }
 
 int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side cancel " << dest << std::endl;
+
+    //Lock before accessing handlers map
+    std::lock_guard<std::mutex> guard(handlers_mutex);
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         if(search->second == internal_handler){
@@ -82,10 +92,13 @@ void MyLibrary::incr(InternalHandler * h, const std::string dest) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         auto i = std::to_string(b);
         rec.append(i);
-        std::cout<< "ON THE C SIDE loop " << rec << std::endl;
+        std::thread::id this_id = std::this_thread::get_id();
+        g_display_mutex.lock();
+        std::cout<< "ON THE C SIDE loop " << rec << " thread id: "<<this_id<< std::endl;
+        g_display_mutex.unlock();
+        //Lock before accessing handlers map
+        std::lock_guard<std::mutex> guard(handlers_mutex);
         if(this->handlers.find(dest) != this->handlers.end()){
-            //NOTE: this is NOT SAFE since between checking the handlers and calling onSend the handler could be canceled
-            //     But this is test code so we good.
             h->onSend(dest, rec.c_str(), rec.length());
         } else {
             std::cout<< "ON THE C SIDE loop '" << dest <<"' removed" << std::endl;

@@ -1,23 +1,23 @@
 use cffi_explore;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::{thread, time};
+use std::sync::{Arc, RwLock};
 
 struct UserSpaceHandler {
-    v: Rc<RefCell<Option<String>>>,
+    v: Arc<RwLock<Option<String>>>,
 }
 
 impl cffi_explore::OnSend for UserSpaceHandler {
     fn on_send(&mut self, src: &str, arg: &[u8]) {
-        println!("User space '{}'", src);
-        // *(self.v.get_mut()) = Some(String::from_utf8(arg.to_vec()).unwrap());
-        *self.v.borrow_mut() = Some(String::from_utf8(arg.to_vec()).unwrap());
+        let id = thread::current().id();
+        println!("User space '{}' tid: {:?} ", src, id);
+        let mut inner = self.v.write().unwrap();
+        *inner = Some(String::from_utf8(arg.to_vec()).unwrap());
     }
 }
 
 fn main() {
-    let d = Rc::new(RefCell::new(None));
-    let user = Box::new(UserSpaceHandler { v: Rc::clone(&d) });
+    let d = Arc::new(RwLock::new(None));
+    let user = Box::new(UserSpaceHandler { v: Arc::clone(&d) });
     let h = cffi_explore::handler_("here", user);
 
     let s = String::from("ledata to send");
@@ -31,6 +31,7 @@ fn main() {
     while count < 2 {
         count+= 1;
         thread::sleep(two_secs);
+        println!("We got it {:?}", &d);
     }
     cffi_explore::cancel_("here", h);
     thread::sleep(two_secs);
