@@ -13,3 +13,5 @@ pub fn handler_(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper 
 
 I can convey to the user of the library that any struct passed to the `handler_` needs to
 properly manage being accessed by multiple threads.
+
+NOTE: This seems deceptively simple so, I'm still wrapping my head around it.
