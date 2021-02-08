@@ -67,7 +67,7 @@ pub fn send_(dest: &str, data: &[u8]) -> bool {
     res >= 0
 }
 
-pub fn handler_(dest: &str, handle: Box<dyn OnSend + Send>) -> UserSpaceWrapper {
+pub fn handler_(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
     let handle = std::boxed::Box::into_raw(handle);
     let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
 

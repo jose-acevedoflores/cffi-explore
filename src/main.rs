@@ -3,21 +3,21 @@ use std::{thread, time};
 use std::sync::{Arc, RwLock};
 
 struct UserSpaceHandler {
-    v: Arc<RwLock<Option<String>>>,
+    val: Arc<RwLock<Option<String>>>,
 }
 
 impl cffi_explore::OnSend for UserSpaceHandler {
     fn on_send(&mut self, src: &str, arg: &[u8]) {
         let id = thread::current().id();
         println!("User space '{}' tid: {:?} ", src, id);
-        let mut inner = self.v.write().unwrap();
+        let mut inner = self.val.write().unwrap();
         *inner = Some(String::from_utf8(arg.to_vec()).unwrap());
     }
 }
 
 fn main() {
     let d = Arc::new(RwLock::new(None));
-    let user = Box::new(UserSpaceHandler { v: Arc::clone(&d) });
+    let user = Box::new(UserSpaceHandler { val: Arc::clone(&d) });
     let h = cffi_explore::handler_("here", user);
 
     let s = String::from("ledata to send");
