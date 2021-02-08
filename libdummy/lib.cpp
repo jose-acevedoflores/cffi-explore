@@ -5,6 +5,7 @@
 #include <map>
 #include "internal.h"
 #include <vector>
+#include <shared_mutex>
 #include <mutex>
 
 std::mutex g_display_mutex;
@@ -40,7 +41,7 @@ void MyLibrary::start(InternalHandler * h, const std::string& dest) {
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     std::cout << "C side send " << dest << std::endl;
 
-    //Lock before accessing handlers map
+    //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be a shared case)
     std::lock_guard<std::mutex> guard(handlers_mutex);
     auto search = handlers.find(dest);
     if(search != handlers.end()){
@@ -56,6 +57,8 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
 
 int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side handle " << dest << std::endl;
+
+    //NOTE this could be a shared mutex (this would be an exclusive case for 'emplace')
     std::lock_guard<std::mutex> guard(handlers_mutex);
     handlers.emplace(dest, internal_handler);
     return 0;
@@ -64,7 +67,7 @@ int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handle
 int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side cancel " << dest << std::endl;
 
-    //Lock before accessing handlers map
+    //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be an exclusive case for 'erase')
     std::lock_guard<std::mutex> guard(handlers_mutex);
     auto search = handlers.find(dest);
     if(search != handlers.end()){
@@ -76,13 +79,22 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
             std::cout << "wrong internal_handler " << std::endl;
         }
     } else {
-        std::cout << "handler for "<<dest << " was not found" << std::endl;
+        std::cout << "handler for "<<dest << " was not found, hard search" << std::endl;
+        for (auto const& e : handlers){
+            if(e.second == internal_handler){
+                std::cout << "hard search: found handler for "<< e.first << std::endl;
+                handlers.erase(e.first);
+                return 0;
+            }
+        }
     }
 
-    //TODO it should probably destroy 'internal_handler' anyway otherwise there could be memory leak.
     return -1;
 }
 
+
+std::shared_timed_mutex lib_mutex;
+auto lib = new MyLibrary();
 
 void MyLibrary::incr(InternalHandler * h, const std::string dest) {
     int b = 0;
@@ -90,24 +102,31 @@ void MyLibrary::incr(InternalHandler * h, const std::string dest) {
     while( b < 20){
         b++;
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        lib_mutex.lock_shared();
+        if(lib == nullptr){
+            lib_mutex.unlock_shared();
+            std::cout<< "ON THE C SIDE lib was shutdown. this ptr is invalid"<< std::endl;
+            return;
+        }
         auto i = std::to_string(b);
         rec.append(i);
         std::thread::id this_id = std::this_thread::get_id();
         g_display_mutex.lock();
         std::cout<< "ON THE C SIDE loop " << rec << " thread id: "<<this_id<< std::endl;
         g_display_mutex.unlock();
-        //Lock before accessing handlers map
+        //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be a shared case)
         std::lock_guard<std::mutex> guard(handlers_mutex);
         if(this->handlers.find(dest) != this->handlers.end()){
             h->onSend(dest, rec.c_str(), rec.length());
+            lib_mutex.unlock_shared();
         } else {
             std::cout<< "ON THE C SIDE loop '" << dest <<"' removed" << std::endl;
+            lib_mutex.unlock_shared();
             return;
         }
     }
 }
 
-auto lib = new MyLibrary();
 
 /////////// Externs
 
@@ -132,7 +151,10 @@ int cancel(const char * dest, void *ctx) {
 
 void shutdown(){
     std::cout << "Shutdown libdummy" << std::endl;
+    lib_mutex.lock();
     delete lib;
+    lib = nullptr;
+    lib_mutex.unlock();
 }
 
 ///////////////

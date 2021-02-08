@@ -22,6 +22,10 @@ impl Drop for UserSpaceWrapper {
         //NOTE: the UserSpaceWrapper object is normally associated with a 'dest'.
         // If the wrong string is passed to the 'libdummy' side it won't free the 'ctx' variable
         // and it would be a memory leak. In the real library that won't be a problem.
+
+        //NOTE: if this is called AFTER the library was shutdown it will segfault.
+        //      Potential solution would be: the shutdown method setting a flag read here
+        //      (SyncLazy looks promising)
         let res = self.delete("");
         println!("dropped UserSpaceWrapper, ctx freed:'{}'", res);
     }
