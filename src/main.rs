@@ -20,14 +20,14 @@ fn main() {
     let user = Box::new(UserSpaceHandler {
         val: Arc::clone(&d),
     });
-    let h = cffi_explore::handler_("here", user);
+    let h = cffi_explore::handler("here", user);
 
     let s = String::from("ledata to send");
-    cffi_explore::send_("here", s.as_bytes());
+    cffi_explore::send("here", s.as_bytes());
     println!("We got it {:?}", &d);
     let two_secs = time::Duration::from_secs(2);
     thread::sleep(two_secs);
-    cffi_explore::send_("here", "another one".as_bytes());
+    cffi_explore::send("here", "another one".as_bytes());
     println!("We got it {:?}", &d);
     let mut count = 0;
     while count < 2 {
@@ -35,7 +35,7 @@ fn main() {
         thread::sleep(two_secs);
         println!("We got it {:?}", &d);
     }
-    cffi_explore::cancel_("here", h);
+    cffi_explore::cancel("here", h);
     thread::sleep(two_secs);
-    cffi_explore::shutdown_();
+    cffi_explore::shutdown();
 }

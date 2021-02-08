@@ -1,5 +1,5 @@
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_uchar};
+use crate::ext::{FFICtx, FFIWrapper, RustSideHandler};
+use std::ffi::CString;
 use std::ptr::null;
 
 pub trait OnSend {
@@ -29,7 +29,7 @@ impl UserSpaceWrapper {
             return false;
         }
         let dest = CString::new(dest).unwrap();
-        let res = unsafe { cancel(dest.as_ptr(), self.ctx) };
+        let res = unsafe { crate::ext::cancel(dest.as_ptr(), self.ctx) };
         unsafe {
             //Important!
             // To free all resources held by the FFIWrapper struct we need to:
@@ -50,13 +50,13 @@ impl UserSpaceWrapper {
         let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
 
         let ffi_obj = Box::new(FFIWrapper {
-            callback: handler_cb,
+            callback: crate::ext::handler_cb,
             self_rust_side: std::boxed::Box::into_raw(rust_side_obj),
         });
 
         let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
         let dest = CString::new(dest).unwrap();
-        let ctx = unsafe { handler(dest.as_ptr(), ffi_obj) };
+        let ctx = unsafe { crate::ext::handler(dest.as_ptr(), ffi_obj) };
 
         UserSpaceWrapper {
             ffi_wrapper: ffi_obj,
@@ -65,65 +65,70 @@ impl UserSpaceWrapper {
     }
 }
 
-#[repr(C)]
-struct RustSideHandler {
-    opaque: *mut dyn OnSend,
-}
+mod ext {
+    use crate::OnSend;
+    use std::ffi::CStr;
+    use std::os::raw::{c_char, c_int, c_uchar};
 
-#[repr(C)]
-struct FFIWrapper {
-    callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
-    self_rust_side: *mut RustSideHandler,
-}
+    #[repr(C)]
+    pub struct RustSideHandler {
+        pub opaque: *mut dyn OnSend,
+    }
 
-#[repr(C)]
-pub struct FFICtx {
-    _private: [u8; 0],
-}
+    #[repr(C)]
+    pub struct FFIWrapper {
+        pub callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
+        pub self_rust_side: *mut RustSideHandler,
+    }
 
-#[link(name = "dummy")]
-extern "C" {
+    #[repr(C)]
+    pub struct FFICtx {
+        _private: [u8; 0],
+    }
 
-    fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
-    //NOTE: FFIWrapper includes a struct that has a trait object BUT it is not meant to be
-    //      accessed by the c side so it should be sage.
-    #[allow(improper_ctypes)]
-    fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
-    fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
-    fn shutdown();
-}
+    #[link(name = "dummy")]
+    extern "C" {
+        pub fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
+        //NOTE: FFIWrapper includes a struct that has a trait object BUT it is not meant to be
+        //      accessed by the c side so it should be sage.
+        #[allow(improper_ctypes)]
+        pub fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
+        pub fn cancel(dest: *const c_char, ctx: *const FFICtx) -> c_int;
+        pub fn shutdown();
+    }
 
-extern "C" fn handler_cb(
-    rust_obj: *mut RustSideHandler,
-    dest: *const c_char,
-    arg: *const c_uchar,
-    arg_len: usize,
-) {
-    unsafe {
-        let dest = CStr::from_ptr(dest);
-        let sl = std::slice::from_raw_parts(arg, arg_len);
-        (*(*rust_obj).opaque).on_send(dest.to_str().unwrap(), sl);
+    pub extern "C" fn handler_cb(
+        rust_obj: *mut RustSideHandler,
+        dest: *const c_char,
+        arg: *const c_uchar,
+        arg_len: usize,
+    ) {
+        unsafe {
+            let dest = CStr::from_ptr(dest);
+            let sl = std::slice::from_raw_parts(arg, arg_len);
+            (*(*rust_obj).opaque).on_send(dest.to_str().unwrap(), sl);
+        }
     }
 }
 
-pub fn send_(dest: &str, data: &[u8]) -> bool {
+pub fn send(dest: &str, data: &[u8]) -> bool {
     let dest = CString::new(dest).unwrap();
-    let res = unsafe { send(dest.as_ptr(), data.as_ptr(), data.len()) };
+    let res = unsafe { crate::ext::send(dest.as_ptr(), data.as_ptr(), data.len()) };
 
     res >= 0
 }
 
-pub fn handler_(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
+pub fn handler(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
     UserSpaceWrapper::new(dest, handle)
 }
 
-pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
+pub fn cancel(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
     let mut user_wrapper = user_wrapper;
     user_wrapper.delete(dest)
 }
 
-pub fn shutdown_() {
-    unsafe { shutdown() }
+pub fn shutdown() {
+    unsafe { crate::ext::shutdown() }
 }
 
 #[cfg(test)]
