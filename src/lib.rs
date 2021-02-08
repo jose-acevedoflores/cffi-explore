@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_uchar};
+use std::ptr::null;
 
 pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
@@ -14,8 +15,53 @@ pub struct UserSpaceWrapper {
 
 impl Drop for UserSpaceWrapper {
     fn drop(&mut self) {
-        println!("free ffi_wrapper, ctx freed by c side");
-        //TODO proper free
+        //NOTE: the UserSpaceWrapper object is normally associated with a 'dest'.
+        // If the wrong string is passed to the 'libdummy' side it won't free the 'ctx' variable
+        // and it would be a memory leak. In the real library that won't be a problem.
+        let res = self.delete("");
+        println!("dropped UserSpaceWrapper, ctx freed:'{}'", res);
+    }
+}
+
+impl UserSpaceWrapper {
+    fn delete(&mut self, dest: &str) -> bool {
+        if self.ctx == null() {
+            return false;
+        }
+        let dest = CString::new(dest).unwrap();
+        let res = unsafe { cancel(dest.as_ptr(), self.ctx) };
+        unsafe {
+            //Important!
+            // To free all resources held by the FFIWrapper struct we need to:
+            //   - Rebuild the Box<FFIWrapper>
+            //   - Rebuild the Box<RustSideHandler> held inside the FFIWrapper
+            //   - Rebuild the Box<dyn OnSend> held inside the RustSideHandler
+            // all these boxes will be dropped here, freeing the resources.
+            let ffi_obj_to_drop = std::boxed::Box::from_raw(self.ffi_wrapper);
+            let self_rust_side_to_drop = std::boxed::Box::from_raw(ffi_obj_to_drop.self_rust_side);
+            std::boxed::Box::from_raw(self_rust_side_to_drop.opaque);
+        }
+        self.ctx = null();
+        res >= 0
+    }
+
+    fn new(dest: &str, handle: Box<dyn OnSend + Sync>) -> Self {
+        let handle = std::boxed::Box::into_raw(handle);
+        let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
+
+        let ffi_obj = Box::new(FFIWrapper {
+            callback: handler_cb,
+            self_rust_side: std::boxed::Box::into_raw(rust_side_obj),
+        });
+
+        let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
+        let dest = CString::new(dest).unwrap();
+        let ctx = unsafe { handler(dest.as_ptr(), ffi_obj) };
+
+        UserSpaceWrapper {
+            ffi_wrapper: ffi_obj,
+            ctx,
+        }
     }
 }
 
@@ -68,39 +114,12 @@ pub fn send_(dest: &str, data: &[u8]) -> bool {
 }
 
 pub fn handler_(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
-    let handle = std::boxed::Box::into_raw(handle);
-    let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
-
-    let ffi_obj = Box::new(FFIWrapper {
-        callback: handler_cb,
-        self_rust_side: std::boxed::Box::into_raw(rust_side_obj),
-    });
-
-    let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
-    let dest = CString::new(dest).unwrap();
-    let ctx = unsafe { handler(dest.as_ptr(), ffi_obj) };
-
-    UserSpaceWrapper {
-        ffi_wrapper: ffi_obj,
-        ctx,
-    }
+    UserSpaceWrapper::new(dest, handle)
 }
 
 pub fn cancel_(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
-    let dest = CString::new(dest).unwrap();
-    let res = unsafe { cancel(dest.as_ptr(), user_wrapper.ctx) };
-    unsafe {
-        //Important!
-        // To free all resources held by the FFIWrapper struct we need to:
-        //   - Rebuild the Box<FFIWrapper>
-        //   - Rebuild the Box<RustSideHandler> held inside the FFIWrapper
-        //   - Rebuild the Box<dyn OnSend> held inside the RustSideHandler
-        // all these boxes will be dropped here, freeing the resources.
-        let ffi_obj_to_drop = std::boxed::Box::from_raw(user_wrapper.ffi_wrapper);
-        let self_rust_side_to_drop = std::boxed::Box::from_raw(ffi_obj_to_drop.self_rust_side);
-        std::boxed::Box::from_raw(self_rust_side_to_drop.opaque);
-    }
-    res >= 0
+    let mut user_wrapper = user_wrapper;
+    user_wrapper.delete(dest)
 }
 
 pub fn shutdown_() {
