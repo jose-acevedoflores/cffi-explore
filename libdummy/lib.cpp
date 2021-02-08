@@ -87,6 +87,7 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
             if(e.second == internal_handler){
                 std::cout << "hard search: found handler for "<< e.first << std::endl;
                 handlers.erase(e.first);
+                delete internal_handler;
                 return 0;
             }
         }
