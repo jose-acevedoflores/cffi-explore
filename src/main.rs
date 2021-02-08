@@ -1,6 +1,6 @@
 use cffi_explore;
-use std::{thread, time};
 use std::sync::{Arc, RwLock};
+use std::{thread, time};
 
 struct UserSpaceHandler {
     val: Arc<RwLock<Option<String>>>,
@@ -17,7 +17,9 @@ impl cffi_explore::OnSend for UserSpaceHandler {
 
 fn main() {
     let d = Arc::new(RwLock::new(None));
-    let user = Box::new(UserSpaceHandler { val: Arc::clone(&d) });
+    let user = Box::new(UserSpaceHandler {
+        val: Arc::clone(&d),
+    });
     let h = cffi_explore::handler_("here", user);
 
     let s = String::from("ledata to send");
@@ -29,7 +31,7 @@ fn main() {
     println!("We got it {:?}", &d);
     let mut count = 0;
     while count < 2 {
-        count+= 1;
+        count += 1;
         thread::sleep(two_secs);
         println!("We got it {:?}", &d);
     }
