@@ -99,3 +99,5 @@ Even though I just wanted to focus on the rust side, there were some leaks on th
 `libdummy` side. Specifically, how it allocated `auto lib = new MyLibrary();`
 statically and never freed it. For this reason I added a shutdown method on the `c`
 side because I wanted to have the satisfaction of having `valgrind` report 0 memory leaks.
+
+- valgrind command used `valgrind --leak-check=full target/debug/cffi-explore`
