@@ -13,7 +13,7 @@ std::mutex g_display_mutex;
 ////////// ASYNC CB test
 class MyLibrary {
    std::map<std::string, InternalHandler*> handlers;
-   std::mutex handlers_mutex;
+   std::shared_timed_mutex handlers_mutex;
 //   std::vector<std::thread> ths;
    void incr(InternalHandler * h, const std::string dest);
  public:
@@ -41,8 +41,9 @@ void MyLibrary::start(InternalHandler * h, const std::string& dest) {
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     std::cout << "C side send " << dest << std::endl;
 
-    //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be a shared case)
-    std::lock_guard<std::mutex> guard(handlers_mutex);
+    //Lock before accessing handlers map.
+    std::shared_lock<std::shared_timed_mutex> guard(handlers_mutex, std::defer_lock);
+
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
@@ -59,7 +60,8 @@ int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handle
     std::cout << "C side handle " << dest << std::endl;
 
     //NOTE this could be a shared mutex (this would be an exclusive case for 'emplace')
-    std::lock_guard<std::mutex> guard(handlers_mutex);
+    std::unique_lock<std::shared_timed_mutex> guard(handlers_mutex, std::defer_lock);
+
     handlers.emplace(dest, internal_handler);
     return 0;
 }
@@ -67,8 +69,9 @@ int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handle
 int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side cancel " << dest << std::endl;
 
-    //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be an exclusive case for 'erase')
-    std::lock_guard<std::mutex> guard(handlers_mutex);
+    //Lock before accessing handlers map.
+    std::unique_lock<std::shared_timed_mutex> guard(handlers_mutex, std::defer_lock);
+
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         if(search->second == internal_handler){
@@ -114,8 +117,10 @@ void MyLibrary::incr(InternalHandler * h, const std::string dest) {
         g_display_mutex.lock();
         std::cout<< "ON THE C SIDE loop " << rec << " thread id: "<<this_id<< std::endl;
         g_display_mutex.unlock();
-        //Lock before accessing handlers map. NOTE this could be a shared mutex (this would be a shared case)
-        std::lock_guard<std::mutex> guard(handlers_mutex);
+
+        //Lock before accessing handlers map.
+        std::shared_lock<std::shared_timed_mutex> guard(handlers_mutex, std::defer_lock);
+
         if(this->handlers.find(dest) != this->handlers.end()){
             h->onSend(dest, rec.c_str(), rec.length());
             lib_mutex.unlock_shared();
