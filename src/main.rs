@@ -1,7 +1,7 @@
 use cffi_explore;
+use cffi_explore::UserSpaceWrapper;
 use std::sync::{Arc, RwLock};
 use std::{thread, time};
-use cffi_explore::UserSpaceWrapper;
 
 struct UserSpaceHandler {
     val: Arc<RwLock<Option<String>>>,
