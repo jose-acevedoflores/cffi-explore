@@ -16,6 +16,16 @@ is ... manual :scream:
 
 
 
+To build libdummy.so:
+pushd libdummy/build
+cmake ..
+cmake --build . -j 4 # <--or set to desired number of threads
+popd
+
+To run:
+cargo run
+
+
 ## Notes to `&self`
 
 - [Passing dyn Trait through ffi](notes/fatptr_through_ffi.md)
