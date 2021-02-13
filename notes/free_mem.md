@@ -100,4 +100,11 @@ Even though I just wanted to focus on the rust side, there were some leaks on th
 statically and never freed it. For this reason I added a shutdown method on the `c`
 side because I wanted to have the satisfaction of having `valgrind` report 0 memory leaks.
 
-- valgrind command used `valgrind --leak-check=full target/debug/cffi-explore`
+- valgrind command used `valgrind --leak-check=full target/debug/cffi-explore`.
+  NOTE: with the `cmake` built `libdummy` don't forget to set
+  `LD_LIBRARY_PATH=/<abs path to>/cffi-explore/target/debug/deps/` in order
+  for valgrind to find the `libdummy.so` otherwise you'll get this erroq
+
+```
+  target/debug/cffi-explore: error while loading shared libraries: libdummy.so: cannot open shared object file: No such file or directory
+ ```
