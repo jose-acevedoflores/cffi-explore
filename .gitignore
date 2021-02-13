@@ -2,4 +2,7 @@
 Cargo.lock
 *.iml
 .idea
-libdummy/*.so
+
+
+libdummy/build/*
+!libdummy/build/.gitignore
