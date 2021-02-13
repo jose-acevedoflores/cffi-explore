@@ -3,6 +3,8 @@ project (dummy)
 
 set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../target/debug/deps )
 
+set (CMAKE_CXX_STANDARD 14)
+
 add_library (dummy SHARED internal.cpp lib.cpp)
 target_include_directories (dummy PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

@@ -1,13 +1,8 @@
+/target
 Cargo.lock
 *.iml
 .idea
 
-target/*
-!target/debug/
-target/debug/*
-!target/debug/deps/
-target/debug/deps/*
-!target/debug/deps/.gitignore
 
 libdummy/build/*
 !libdummy/build/.gitignore
