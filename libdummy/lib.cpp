@@ -31,7 +31,6 @@ int cancel(const char * dest, void *ctx) {
 
 void shutdown(){
     std::cout << "Shutdown libdummy" << std::endl;
-    lib->shutdown();
     delete lib;
     lib = nullptr;
 }

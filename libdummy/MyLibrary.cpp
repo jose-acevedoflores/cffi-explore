@@ -4,20 +4,16 @@
 #include "MyLibrary.h"
 
 MyLibrary::~MyLibrary() {
+    done = true;
+    for( auto& thread : incrThreads ) {
+        thread.join();
+    }
     std::cout << "lib destroyed" << std::endl;
 }
 
 void MyLibrary::startIncrThread(InternalHandler * h, const std::string& dest) {
     //Start thread
     incrThreads.emplace_back( std::thread( &MyLibrary::incr, this, h, std::string(dest) ) );
-}
-
-void MyLibrary::shutdown() {
-    //Stop and join all threads
-    done = true;
-    for( auto& thread : incrThreads ) {
-        thread.join();
-    }
 }
 
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
