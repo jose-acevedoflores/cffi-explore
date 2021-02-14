@@ -1,7 +1,6 @@
-#pragma once
+#ifndef DUMMY_LIB_H
+#define DUMMY_LIB_H
 
-#include <thread>
-#include <string>
 
 typedef void* FFIHandler;
 
@@ -52,3 +51,8 @@ extern "C"
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+
+
+
+#endif // DUMMY_LIB_H

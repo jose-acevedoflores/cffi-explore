@@ -1,6 +1,8 @@
-#include "lib.h"
-#include <iostream>
+#ifndef DUMMY_INTERNAL_H
+#define DUMMY_INTERNAL_H
 
+#include <iostream>
+#include "lib.h"
 
 ////////// ASYNC CB test
 class InternalHandler {
@@ -20,3 +22,4 @@ class InternalHandler {
     }
 };
 
+#endif // DUMMY_INTERNAL_H
