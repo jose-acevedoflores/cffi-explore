@@ -39,7 +39,7 @@ fn main() {
     {
         let _h2 = setup_other_handler();
         cffi_explore::send("here", "another one".as_bytes());
-        cffi_explore::send("here12", "for other handl".as_bytes());
+        cffi_explore::send("here12", "for other handle".as_bytes());
         println!("We got it {:?}", &d);
         let mut count = 0;
         while count < 2 {

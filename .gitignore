@@ -3,6 +3,7 @@ Cargo.lock
 *.iml
 .idea
 
-
+libdummy/cmake-build-debug/
 libdummy/build/*
 !libdummy/build/.gitignore
+
