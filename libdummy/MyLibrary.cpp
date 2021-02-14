@@ -37,7 +37,7 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
 int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side handle " << dest << std::endl;
 
-    //NOTE this could be a shared mutex (this would be an exclusive case for 'emplace')
+    //Lock exclusive for 'emplace'
     std::unique_lock guard(handlersGuard);
 
     handlers.emplace(dest, internal_handler);
@@ -47,7 +47,7 @@ int MyLibrary::handle(const std::string& dest, InternalHandler * internal_handle
 int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handler ){
     std::cout << "C side cancel " << dest << std::endl;
 
-    //Lock before accessing handlers map.
+    //Lock exclusive for 'erase'
     std::unique_lock guard(handlersGuard);
 
     auto search = handlers.find(dest);
