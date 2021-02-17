@@ -5,6 +5,12 @@ use crate::ext::{FFICtx, FFIWrapper, RustSideHandler};
 use std::ffi::CString;
 use std::ptr::null;
 
+// These static muts are used to control the start and shutdown of the library.
+// NOTE: accessing and setting this is NOT thread safe. Considering a lazy_static!
+// or SyncLazy(when stable)
+static mut LIB_VALID: bool = true;
+static mut LIB_STARTED: bool = false;
+
 pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
 }
@@ -33,6 +39,14 @@ impl Drop for UserSpaceWrapper {
 
 impl UserSpaceWrapper {
     fn delete(&mut self, dest: &str) -> bool {
+        //Safety: accessing static mut is NOT thread safe
+        unsafe {
+            if !LIB_VALID {
+                // if library is no longer valid it will segfault at 'cancel'
+                return false;
+            }
+        }
+
         if self.ctx == null() {
             return false;
         }
@@ -167,46 +181,78 @@ mod ext {
     }
 }
 
-/// Sends a series of bytes to the given `dest`
-/// # Arguments
-/// * `dest` - destination for the data
-/// * `data` - byte array of the data to be sent
-///
-/// Returns true if operation is a success
-///
-pub fn send(dest: &str, data: &[u8]) -> bool {
-    let dest = CString::new(dest).unwrap();
-
-    //Safety: calling extern function. This is valid as long as shutdown hasn't been called
-    let res = unsafe { crate::ext::send(dest.as_ptr(), data.as_ptr(), data.len()) };
-
-    res >= 0
+pub struct LibDummy {
+    // Make LibDummy a ZST with a private field so it can only be instantiated via the
+    // start_lib function (factory style)
+    _hide: (),
 }
 
-/// Register a handler on the given `dest`
-/// # Arguments
-/// * `dest` - route the given `handler` should receive data on.
-/// * `handle` - handler data to be used by libdummy
-///
-/// Returns a context struct that corresponds to the given `ffi_obj`
-pub fn handler(dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
-    UserSpaceWrapper::new(dest, handle)
+pub fn start_lib() -> Result<LibDummy, &'static str> {
+    //Safety: Accessing/setting static mut LIB_STARTED is NOT thread safe
+    // https://doc.rust-lang.org/reference/items/static-items.html
+    unsafe {
+        if !LIB_STARTED {
+            LIB_STARTED = false
+        } else {
+            return Err("Already initialized");
+        }
+    }
+    return Ok(LibDummy { _hide: () });
 }
 
-/// Cancel a `dest`/`user_wrapper` combination. This should correspond to the ones received by a call
-/// to [`handler`]
-/// # Arguments
-/// * `dest` - same route used that produced the given `user_wrapper`
-/// * `user_wrapper` - handler to cancel.
-pub fn cancel(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
-    let mut user_wrapper = user_wrapper;
-    user_wrapper.delete(dest)
-}
+impl LibDummy {
+    /// Sends a series of bytes to the given `dest`
+    /// # Arguments
+    /// * `dest` - destination for the data
+    /// * `data` - byte array of the data to be sent
+    ///
+    /// Returns true if operation is a success
+    ///
+    pub fn send(&self, dest: &str, data: &[u8]) -> bool {
+        let dest = CString::new(dest).unwrap();
 
-///Completely shutdown libdummy. After this call, no other extern method is valid.
-pub fn shutdown() {
-    //Safety: calling extern function.
-    unsafe { crate::ext::shutdown() }
+        //Safety: calling extern function. This is valid as long as shutdown hasn't been called
+        let res = unsafe { crate::ext::send(dest.as_ptr(), data.as_ptr(), data.len()) };
+
+        res >= 0
+    }
+
+    /// Register a handler on the given `dest`
+    /// # Arguments
+    /// * `dest` - route the given `handler` should receive data on.
+    /// * `handle` - handler data to be used by libdummy
+    ///
+    /// Returns a context struct that corresponds to the given `ffi_obj`
+    pub fn handler(&self, dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
+        UserSpaceWrapper::new(dest, handle)
+    }
+
+    /// Cancel a `dest`/`user_wrapper` combination. This should correspond to the ones received by a call
+    /// to [`handler`]
+    /// # Arguments
+    /// * `dest` - same route used that produced the given `user_wrapper`
+    /// * `user_wrapper` - handler to cancel.
+    pub fn cancel(&self, dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
+        let mut user_wrapper = user_wrapper;
+        user_wrapper.delete(dest)
+    }
+
+    ///Completely shutdown libdummy. After this call, no other extern method is valid.
+    ///
+    /// # Arguments
+    /// * 'self' - consume the library so it can no longer be used.
+    pub fn shutdown(self) {
+        //Safety: calling extern function
+        //        Also accessing static mut LIB_VALID which is NOT thread safe.
+        unsafe {
+            if LIB_VALID {
+                LIB_VALID = false;
+                crate::ext::shutdown();
+            } else {
+                println!("Library was shutdown already")
+            }
+        }
+    }
 }
 
 #[cfg(test)]
