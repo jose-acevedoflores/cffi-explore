@@ -8,6 +8,15 @@ MyLibrary::~MyLibrary() {
     for( auto& thread : incrThreads ) {
         thread.join();
     }
+
+    //Lock exclusive for 'erase'
+    std::unique_lock guard(handlersGuard);
+    for (auto const& e : handlers){
+
+        std::cout << "found dangling handler for '" << e.first << "'" << std::endl;
+        delete e.second;
+    }
+
     std::cout << "lib destroyed" << std::endl;
 }
 
