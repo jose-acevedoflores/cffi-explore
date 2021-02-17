@@ -4,12 +4,18 @@
 use crate::ext::{FFICtx, FFIWrapper, RustSideHandler};
 use std::ffi::CString;
 use std::ptr::null;
+use std::sync::RwLock;
+
+#[macro_use]
+extern crate lazy_static;
 
 // These static muts are used to control the start and shutdown of the library.
 // NOTE: accessing and setting this is NOT thread safe. Considering a lazy_static!
 // or SyncLazy(when stable)
-static mut LIB_VALID: bool = true;
-static mut LIB_STARTED: bool = false;
+lazy_static! {
+    static ref LIB_VALID: RwLock<bool> = RwLock::new(true);
+    static ref LIB_STARTED: RwLock<bool> = RwLock::new(false);
+}
 
 pub trait OnSend {
     fn on_send(&mut self, src: &str, arg: &[u8]);
@@ -29,9 +35,6 @@ impl Drop for UserSpaceWrapper {
         // If the wrong string is passed to the 'libdummy' side it won't free the 'ctx' variable
         // and it would be a memory leak. In the real library that won't be a problem.
 
-        //NOTE: if this is called AFTER the library was shutdown it will segfault.
-        //      Potential solution would be: the shutdown method setting a flag read here
-        //      (SyncLazy looks promising)
         let res = self.delete("");
         println!("dropped UserSpaceWrapper, ctx freed:'{}'", res);
     }
@@ -39,25 +42,24 @@ impl Drop for UserSpaceWrapper {
 
 impl UserSpaceWrapper {
     fn delete(&mut self, dest: &str) -> bool {
-        //Safety: accessing static mut is NOT thread safe
-        unsafe {
-            if !LIB_VALID {
-                // if library is no longer valid it will segfault at 'cancel'
-                return false;
-            }
-        }
-
         if self.ctx == null() {
             return false;
         }
         let dest = CString::new(dest).unwrap();
 
-        //Safety: calling extern function. This is valid as long as shutdown hasn't been called
-        let res = unsafe { crate::ext::cancel(dest.as_ptr(), self.ctx) };
+        let res = if *LIB_VALID.read().unwrap() {
+            //Safety: calling extern function. This is valid as long as shutdown hasn't been called
+            unsafe { crate::ext::cancel(dest.as_ptr(), self.ctx) }
+        } else {
+            // This means the library was shutdown, but we had a ctx that was not freed.
+            // This will proceed to free the boxes.
+            println!("delete after shutdown");
+            -1
+        };
 
         //Safety: The boxes are created in 'new' and immediately consumed to raw ptrs.
-        //        They are only ever read again in here just to drop them so they will
-        //        be valid
+        //        They are only ever read again in here just to drop them. Since this is called
+        //        after calling 'cancel' above it will be safe to free the boxes
         unsafe {
             //Important!
             // To free all resources held by the FFIWrapper struct we need to:
@@ -174,6 +176,7 @@ mod ext {
         // RustSideHandler comes paired up with an FFICtx. Once the FFCtx is returned to the C via
         // 'cancel' the associated RustSideHandler is freed.
         unsafe {
+            //TODO: should it read lib valid here ??
             let dest = CStr::from_ptr(dest);
             let sl = std::slice::from_raw_parts(arg, arg_len);
             (*(*rust_obj).opaque).on_send(dest.to_str().unwrap(), sl);
@@ -188,14 +191,11 @@ pub struct LibDummy {
 }
 
 pub fn start_lib() -> Result<LibDummy, &'static str> {
-    //Safety: Accessing/setting static mut LIB_STARTED is NOT thread safe
-    // https://doc.rust-lang.org/reference/items/static-items.html
-    unsafe {
-        if !LIB_STARTED {
-            LIB_STARTED = false
-        } else {
-            return Err("Already initialized");
-        }
+    let mut lib_started_w_lock = LIB_STARTED.write().unwrap();
+    if !*lib_started_w_lock {
+        *lib_started_w_lock = false
+    } else {
+        return Err("Already initialized");
     }
     return Ok(LibDummy { _hide: () });
 }
@@ -242,15 +242,11 @@ impl LibDummy {
     /// # Arguments
     /// * 'self' - consume the library so it can no longer be used.
     pub fn shutdown(self) {
-        //Safety: calling extern function
-        //        Also accessing static mut LIB_VALID which is NOT thread safe.
+        let mut lib_valid_w_lock = LIB_VALID.write().unwrap();
+        *lib_valid_w_lock = false;
+
         unsafe {
-            if LIB_VALID {
-                LIB_VALID = false;
-                crate::ext::shutdown();
-            } else {
-                println!("Library was shutdown already")
-            }
+            crate::ext::shutdown();
         }
     }
 }

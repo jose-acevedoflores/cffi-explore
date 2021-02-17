@@ -51,9 +51,9 @@ fn main() {
         lib.cancel("here", h);
 
         //NOTE: _h2 drops out here. The implicit drop will result
-        // in a call to cancel which will segfault IF it's called after shutdown.
-        // See notes in UserSpaceWrapper.drop
+        // in a call to cancel AFTER the shutdown shutdown.
+        // This should NOT cause a segfault.
+        thread::sleep(two_secs);
+        lib.shutdown();
     }
-    thread::sleep(two_secs);
-    lib.shutdown();
 }
