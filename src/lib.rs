@@ -37,7 +37,13 @@ impl UserSpaceWrapper {
             return false;
         }
         let dest = CString::new(dest).unwrap();
+
+        //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let res = unsafe { crate::ext::cancel(dest.as_ptr(), self.ctx) };
+
+        //Safety: The boxes are created in 'new' and immediately consumed to raw ptrs.
+        //        They are only ever read again in here just to drop them so they will
+        //        be valid
         unsafe {
             //Important!
             // To free all resources held by the FFIWrapper struct we need to:
@@ -64,6 +70,8 @@ impl UserSpaceWrapper {
 
         let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
         let dest = CString::new(dest).unwrap();
+
+        //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let ctx = unsafe { crate::ext::handler(dest.as_ptr(), ffi_obj) };
 
         UserSpaceWrapper {
@@ -125,7 +133,7 @@ mod ext {
         ///
         /// Returns a context struct that corresponds to the given `ffi_obj`
         //NOTE: FFIWrapper includes a struct that has a trait object BUT it is not meant to be
-        //      accessed by the c side so it should be sage.
+        //      accessed by the c side so it should be safe.
         #[allow(improper_ctypes)]
         pub fn handler(dest: *const c_char, ffi_obj: *mut FFIWrapper) -> *const FFICtx;
 
@@ -146,6 +154,11 @@ mod ext {
         arg: *const c_uchar,
         arg_len: usize,
     ) {
+        //Safety: This is the most critical unsafe block.
+        // This block assumes the C library honors its contract and will NOT trigger this callback
+        // with a RustSideHandler that has already been freed. As a reminder, a
+        // RustSideHandler comes paired up with an FFICtx. Once the FFCtx is returned to the C via
+        // 'cancel' the associated RustSideHandler is freed.
         unsafe {
             let dest = CStr::from_ptr(dest);
             let sl = std::slice::from_raw_parts(arg, arg_len);
@@ -163,6 +176,8 @@ mod ext {
 ///
 pub fn send(dest: &str, data: &[u8]) -> bool {
     let dest = CString::new(dest).unwrap();
+
+    //Safety: calling extern function. This is valid as long as shutdown hasn't been called
     let res = unsafe { crate::ext::send(dest.as_ptr(), data.as_ptr(), data.len()) };
 
     res >= 0
@@ -190,6 +205,7 @@ pub fn cancel(dest: &str, user_wrapper: UserSpaceWrapper) -> bool {
 
 ///Completely shutdown libdummy. After this call, no other extern method is valid.
 pub fn shutdown() {
+    //Safety: calling extern function.
     unsafe { crate::ext::shutdown() }
 }
 
