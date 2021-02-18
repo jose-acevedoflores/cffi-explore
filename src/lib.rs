@@ -4,17 +4,42 @@
 use crate::ext::{FFICtx, FFIWrapper, RustSideHandler};
 use std::ffi::CString;
 use std::ptr::null;
+#[cfg(feature = "with_lib_checks")]
 use std::sync::RwLock;
 
+#[cfg(feature = "with_lib_checks")]
 #[macro_use]
 extern crate lazy_static;
 
 // These static muts are used to control the start and shutdown of the library.
 // NOTE: accessing and setting this is NOT thread safe. Considering a lazy_static!
 // or SyncLazy(when stable)
+// NOTE: when using lazy_static the output of valgrind will show some blocks that are not freed
+#[cfg(feature = "with_lib_checks")]
 lazy_static! {
     static ref LIB_VALID: RwLock<bool> = RwLock::new(true);
     static ref LIB_STARTED: RwLock<bool> = RwLock::new(false);
+}
+
+#[cfg(feature = "with_lib_checks")]
+pub fn cancel_call(dest: &str, ctx: *const FFICtx) -> i32 {
+    let dest = CString::new(dest).unwrap();
+    if *LIB_VALID.read().unwrap() {
+        //Safety: calling extern function. This is valid as long as shutdown hasn't been called
+        unsafe { crate::ext::cancel(dest.as_ptr(), ctx) }
+    } else {
+        // This means the library was shutdown, but we had a ctx that was not freed.
+        // This will proceed to free the boxes.
+        println!("delete after shutdown");
+        -1
+    }
+}
+
+#[cfg(not(feature = "with_lib_checks"))]
+pub fn cancel_call(dest: &str, ctx: *const FFICtx) -> i32 {
+    let dest = CString::new(dest).unwrap();
+    //Safety: calling extern function. This is valid as long as shutdown hasn't been called
+    unsafe { crate::ext::cancel(dest.as_ptr(), ctx) }
 }
 
 pub trait OnSend {
@@ -45,17 +70,8 @@ impl UserSpaceWrapper {
         if self.ctx == null() {
             return false;
         }
-        let dest = CString::new(dest).unwrap();
 
-        let res = if *LIB_VALID.read().unwrap() {
-            //Safety: calling extern function. This is valid as long as shutdown hasn't been called
-            unsafe { crate::ext::cancel(dest.as_ptr(), self.ctx) }
-        } else {
-            // This means the library was shutdown, but we had a ctx that was not freed.
-            // This will proceed to free the boxes.
-            println!("delete after shutdown");
-            -1
-        };
+        let res = cancel_call(dest, self.ctx);
 
         //Safety: The boxes are created in 'new' and immediately consumed to raw ptrs.
         //        They are only ever read again in here just to drop them. Since this is called
@@ -190,6 +206,7 @@ pub struct LibDummy {
     _hide: (),
 }
 
+#[cfg(feature = "with_lib_checks")]
 pub fn start_lib() -> Result<LibDummy, &'static str> {
     let mut lib_started_w_lock = LIB_STARTED.write().unwrap();
     if !*lib_started_w_lock {
@@ -197,6 +214,11 @@ pub fn start_lib() -> Result<LibDummy, &'static str> {
     } else {
         return Err("Already initialized");
     }
+    return Ok(LibDummy { _hide: () });
+}
+
+#[cfg(not(feature = "with_lib_checks"))]
+pub fn start_lib() -> Result<LibDummy, &'static str> {
     return Ok(LibDummy { _hide: () });
 }
 
@@ -241,10 +263,18 @@ impl LibDummy {
     ///
     /// # Arguments
     /// * 'self' - consume the library so it can no longer be used.
+    #[cfg(feature = "with_lib_checks")]
     pub fn shutdown(self) {
         let mut lib_valid_w_lock = LIB_VALID.write().unwrap();
         *lib_valid_w_lock = false;
 
+        unsafe {
+            crate::ext::shutdown();
+        }
+    }
+
+    #[cfg(not(feature = "with_lib_checks"))]
+    pub fn shutdown(self) {
         unsafe {
             crate::ext::shutdown();
         }

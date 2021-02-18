@@ -50,10 +50,20 @@ fn main() {
         }
         lib.cancel("here", h);
 
+        thread::sleep(two_secs);
+
+        #[cfg(feature = "with_lib_checks")]
+        lib.shutdown();
+
         //NOTE: _h2 drops out here. The implicit drop will result
         // in a call to cancel AFTER the shutdown shutdown.
         // This should NOT cause a segfault.
-        thread::sleep(two_secs);
-        lib.shutdown();
     }
+
+    //NOTE: the conditional compilation of 'lib.shutdown' is because without the lib checks, when _h2
+    // is dropped it assumes lib is still valid. So, if we call 'lib.shutdown' in the scope above
+    // when _h2 gets dropped it will segfault.
+
+    #[cfg(not(feature = "with_lib_checks"))]
+    lib.shutdown();
 }
