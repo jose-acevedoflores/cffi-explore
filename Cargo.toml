@@ -10,8 +10,8 @@ edition = "2018"
 lazy_static = "1.4.0"
 
 [features]
-# This flag is used to make the exposed 'LibDummy' thread safe by introducing static mut checks perform
-# performed at start and at shutdown.
+# This flag is used to make the exposed 'LibDummy' thread safe by introducing static mut checks performed
+# at start and at shutdown.
 # I maninly added this flag as an excuse to see conditional compilation in action and make valgrind report
 # no memory leaks. If this flag is turned on valgrind will report two allocations not properly freed (the two statics)
 with_lib_checks=[]
