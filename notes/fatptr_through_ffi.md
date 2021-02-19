@@ -84,9 +84,10 @@ Fat ptr passed to callback: (140314899668256, 140732784668465)
 
 ```
 You can see the ptr to the vtable is all messed up, like it didn't survive the trip.
-Some more digging and I read somewhere that arguments for `extern "C"` functions
-are passed via registers. I believe that is why I loose the vtable ptr in transit
-since I only get the first 8 bytes.
+Some more digging and I remembered [this article](https://os.phil-opp.com/cpu-exceptions/)
+where it says that arguments for `extern "C"` functions are passed via registers.
+I believe that is why I loose the vtable ptr in transit since I only get
+the first 8 bytes.
 
 To fix it, I just wrapped the `*mut dyn OnSend` ptr in a plain struct with `#[repr(C)]`
 and passed that around. This introduces another level of indirection and a
@@ -147,3 +148,6 @@ due to the nature of how arguments are passed in the "C" abi.
 I also thought that, maybe this whole thing of passing a trait Object is a bad idea; but
 I figured, that shouldn't be that bad for my use case since that `RustSideHandler`
 struct will NOT be accessed on the library side.
+
+## Misc
+- [System V ABI](https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf)
