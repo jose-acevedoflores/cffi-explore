@@ -2,6 +2,8 @@ cmake_minimum_required (VERSION 3.16.3)
 project (dummy)
 
 set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../target/debug/deps )
+# Uncomment below (and comment above line) when running 'cargo <build|run> --release'
+#set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../target/release/deps )
 
 set (CMAKE_CXX_STANDARD 17)
 
