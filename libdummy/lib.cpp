@@ -38,10 +38,12 @@ void shutdown(){
 
 FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
+
     std::vector<char> vec;
     int result = lib->send_inline(s, arg, argLen, vec);
 
-    std::cout << "c side vec size" << vec.size() << std::endl;
+//    std::string sfvec(vec.begin(), vec.end());
+//    std::cout << "c side vec size " << vec.size() << " and str was '"<< sfvec <<"'"<< std::endl;
     return FFIBuf {
         .data_ptr = vec.data(),
         .data_len = vec.size(),

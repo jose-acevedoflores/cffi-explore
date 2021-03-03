@@ -124,7 +124,6 @@ mod ext {
     use crate::OnSend;
     use std::ffi::CStr;
     use std::os::raw::{c_char, c_int, c_uchar};
-    use std::ptr::null;
 
     /// Struct introduced in order to send the fat ptr that represents an OnSend trait object
     /// through ffi.
@@ -243,9 +242,14 @@ mod ext {
         };
 
         println!("VEC FROM C SIDE SIZE INLINE {}", data.len());
+
+        // let ptr =  data.as_ptr();
+        let cnt = data.len();
+        let b = data.into_boxed_slice();
+        let ptr = b.as_ptr();
         FFIBuf {
-            data_ptr: null(),
-            data_len: 0,
+            data_ptr: ptr,
+            data_len: cnt,
         }
     }
 }
@@ -301,9 +305,10 @@ impl LibDummy {
 
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let res = unsafe { crate::ext::send_inline(dest.as_ptr(), data.as_ptr(), data.len()) };
-        println!("WE GOT SOMETHING {}", res.data_len);
+        // println!("WE GOT SOMETHING {}", res.data_len);
 
-        Vec::new()
+        let slice: &[u8] = unsafe { std::slice::from_raw_parts(res.data_ptr, res.data_len) };
+        Vec::from(slice)
     }
 
     /// Register a handler on the given `dest`
@@ -359,7 +364,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn on_send_inline(&mut self, src: &str, arg: &[u8]) -> Vec<u8> {
+        fn on_send_inline(&mut self, _src: &str, _arg: &[u8]) -> Vec<u8> {
             unimplemented!()
         }
     }
@@ -369,7 +374,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn on_send_inline(&mut self, src: &str, arg: &[u8]) -> Vec<u8> {
+        fn on_send_inline(&mut self, _src: &str, _arg: &[u8]) -> Vec<u8> {
             unimplemented!()
         }
     }

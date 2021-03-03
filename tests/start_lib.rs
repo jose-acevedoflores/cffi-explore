@@ -36,13 +36,13 @@ fn wait_on_result(msg_rcvd: &Arc<RwLock<Option<String>>>) {
     let mut num_calls = 0;
     loop {
         match msg_rcvd.try_read() {
-            Ok(lck) if lck.is_some()  => {
+            Ok(lck) if lck.is_some() => {
                 //Expect two calls, one on the same thread and one in the bg thread.
                 if num_calls >= 2 {
                     break;
                 }
                 num_calls += 1;
-            },
+            }
             _ => (),
         }
 

@@ -16,7 +16,7 @@ public:
     MyLibrary() = default;
     virtual ~MyLibrary();
 
-    void startIncrThread(InternalHandler * h, const std::string& dest);
+    void startIncrThread(InternalHandler * h, const std::string& dest, const std::string& data);
     int send(const std::string& dest, const char* arg, size_t argLen);
     int send_inline(const std::string& dest, const char* arg, size_t argLen, std::vector<char> &vec);
     int handle(const std::string& dest, InternalHandler * internal_handler);
@@ -29,7 +29,7 @@ private:
     std::deque<std::thread> incrThreads;
     std::atomic<bool> done = false;
 
-    void incr(InternalHandler* h, const std::string& dest, bool isInlineSend, std::vector<char> &vec);
+    void incr(InternalHandler* h, const std::string& dest, bool isInlineSend, std::vector<char> &vec, const std::string& data);
 };
 
 #endif //DUMMY_MYLIBRARY_H

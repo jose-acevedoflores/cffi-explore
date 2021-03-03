@@ -1,7 +1,7 @@
 use cffi_explore;
 use cffi_explore::{LibDummy, UserSpaceWrapper};
 use std::sync::{Arc, RwLock};
-use std::{thread, time};
+use std::thread;
 
 const HANDLER_FOR_TEST: &str = "here42";
 const ECHO_PREFIX: &str = "echoed: ";
@@ -42,9 +42,12 @@ fn test_send_inline() {
     {
         let (_user, _msg_rcvd) = setup_handler(&lib);
         let s = String::from("ledata to send");
+
+        let id = thread::current().id();
+        println!(" sent from thread {:?}", id);
         let vec = lib.send_inline(HANDLER_FOR_TEST, s.as_bytes());
         let echoed_string = String::from_utf8(vec).unwrap();
-        // assert_eq!(format!("{}{}", ECHO_PREFIX, s), echoed_string);
+        assert_eq!(format!("{}{}", ECHO_PREFIX, s), echoed_string);
     }
     lib.shutdown();
 }

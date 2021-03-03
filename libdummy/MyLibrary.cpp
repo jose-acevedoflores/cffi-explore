@@ -22,10 +22,10 @@ MyLibrary::~MyLibrary() {
     std::cout << "lib destroyed" << std::endl;
 }
 
-void MyLibrary::startIncrThread(InternalHandler * h, const std::string& dest) {
+void MyLibrary::startIncrThread(InternalHandler * h, const std::string& dest, const std::string& data) {
     std::vector<char> _unused;
     //Start thread
-    incrThreads.emplace_back( std::thread( &MyLibrary::incr, this, h, std::string(dest), ON_SEND, std::ref(_unused)) );
+    incrThreads.emplace_back( std::thread( &MyLibrary::incr, this, h, std::string(dest), ON_SEND, std::ref(_unused), data) );
 }
 
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
@@ -37,7 +37,8 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     auto search = handlers.find(dest);
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
-        startIncrThread(search->second, dest);
+        auto data = std::string(arg, argLen);
+        startIncrThread(search->second, dest, data);
         return 0;
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
@@ -54,7 +55,8 @@ int MyLibrary::send_inline(const std::string& dest, const char* arg, size_t argL
 
     auto search = handlers.find(dest);
     if(search != handlers.end()) {
-        auto t = std::thread( &MyLibrary::incr, this, search->second, std::string(dest), ON_SEND_INLINE, std::ref(vec));
+        auto data = std::string(arg, argLen);
+        auto t = std::thread( &MyLibrary::incr, this, search->second, std::string(dest), ON_SEND_INLINE, std::ref(vec), data);
         //NOTE: this is just for testing, if there is no handler registered this locks for 20 secs;
         t.join();
         return 0;
@@ -105,7 +107,7 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
     return -1;
 }
 
-void MyLibrary::incr(InternalHandler * h, const std::string& dest, bool isInlineSend, std::vector<char> &vec) {
+void MyLibrary::incr(InternalHandler * h, const std::string& dest, bool isInlineSend, std::vector<char> &vec, const std::string& data) {
     int b = 0;
     auto rec = std::string("recurrent from c side: ");
     while( b < 20 ){
@@ -124,9 +126,9 @@ void MyLibrary::incr(InternalHandler * h, const std::string& dest, bool isInline
 
         if(handlers.find(dest) != handlers.end()){
             if (isInlineSend){
-                std::string str = h->onSendInline(dest, rec.c_str(), rec.length());
+                std::string str = h->onSendInline(dest, data.c_str(), data.length());
 
-                std::cout << "incr onSendInLine str size " << str.size() << std::endl;
+                std::cout << "incr onSendInLine str size " << str.size() <<  " str receveived was '" << str <<"'"<< std::endl;
                 std::copy(str.begin(), str.end(), std::back_inserter(vec));
                 std::cout << "incr onSendInLine vec size " << vec.size() << std::endl;
                 return;
