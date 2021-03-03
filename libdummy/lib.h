@@ -3,9 +3,12 @@
 
 
 typedef void* FFIHandler;
+
+typedef void (*destruct)(void*);
 struct FFIBuf {
    const char* data_ptr;
    size_t data_len;
+   destruct cb;
 };
 
 
@@ -16,7 +19,7 @@ struct FFIBuf {
 
  */
 typedef void (*callback_t)(FFIHandler, const char* dest, const char*, size_t);
-typedef FFIBuf (*callback_wr_t)(FFIHandler, const char* dest, const char*, size_t);
+typedef FFIBuf* (*callback_wr_t)(FFIHandler, const char* dest, const char*, size_t);
 struct FFIWrapper {
     callback_t cb;
     callback_wr_t callback_with_return;
@@ -37,7 +40,8 @@ extern "C"
 #endif
 
     int send(const char* dest, const char* arg, size_t argLen);
-    FFIBuf send_inline(const char* dest, const char* arg, size_t argLen);
+    FFIBuf* send_inline(const char* dest, const char* arg, size_t argLen);
+    void m_des(void* buf);
 
     /**
         This function will register a user provided FFIWrapper ptr.

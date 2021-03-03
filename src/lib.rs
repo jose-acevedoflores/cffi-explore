@@ -122,7 +122,7 @@ impl UserSpaceWrapper {
 /// Private module that encapsulates all the extern parts of the library.
 mod ext {
     use crate::OnSend;
-    use std::ffi::CStr;
+    use std::ffi::{CStr, c_void};
     use std::os::raw::{c_char, c_int, c_uchar};
 
     /// Struct introduced in order to send the fat ptr that represents an OnSend trait object
@@ -137,6 +137,8 @@ mod ext {
     pub struct FFIBuf {
         pub data_ptr: *const c_uchar,
         pub data_len: usize,
+        pub destroyer: extern "C" fn( *mut FFIBuf ),
+        // pub op:
     }
 
     /// Structure defined by the libdummy header for data exchange.
@@ -145,7 +147,7 @@ mod ext {
         /// Function pointer used by the library to reach back
         pub callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
         pub callback_with_return:
-            extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize) -> FFIBuf,
+            extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize) -> *const FFIBuf,
         /// Entity that is meant to handle the callback. This field will be passed in as the
         /// first arg of the fn ptr above.
         pub self_rust_side: *mut RustSideHandler,
@@ -180,7 +182,7 @@ mod ext {
         ///
         /// Returns an int where '>=0' is success
         ///
-        pub fn send_inline(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> FFIBuf;
+        pub fn send_inline(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> *mut FFIBuf;
 
         /// Register a handler on the given `dest`
         /// # Arguments
@@ -223,13 +225,23 @@ mod ext {
         }
     }
 
+    pub extern "C" fn destroy_buf(done: *mut FFIBuf){
+
+        println!("DESTORY");
+        unsafe {
+            let _ffibuf = std::boxed::Box::from_raw(done);
+
+        }
+
+    }
+
     /// Function callback used by the library to reach back to rust.
     pub extern "C" fn handler_cb_with_return(
         rust_obj: *mut RustSideHandler,
         dest: *const c_char,
         arg: *const c_uchar,
         arg_len: usize,
-    ) -> FFIBuf {
+    ) -> *const FFIBuf {
         //Safety: This is the most critical unsafe block.
         // This block assumes the C library honors its contract and will NOT trigger this callback
         // with a RustSideHandler that has already been freed. As a reminder, a
@@ -247,10 +259,20 @@ mod ext {
         let cnt = data.len();
         let b = data.into_boxed_slice();
         let ptr = b.as_ptr();
-        FFIBuf {
+        let fibuf = std::boxed::Box::new(FFIBuf{
             data_ptr: ptr,
             data_len: cnt,
-        }
+            destroyer: destroy_buf
+
+        });
+
+        let ret = std::boxed::Box::into_raw(fibuf) as *const FFIBuf;
+
+        ret
+        // FFIBuf {
+        //     data_ptr: ptr,
+        //     data_len: cnt,
+        // }
     }
 }
 
@@ -305,9 +327,14 @@ impl LibDummy {
 
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let res = unsafe { crate::ext::send_inline(dest.as_ptr(), data.as_ptr(), data.len()) };
-        // println!("WE GOT SOMETHING {}", res.data_len);
+        unsafe {
+            println!("WE GOT SOMETHING {}", (*res).data_len);
+        }
+        let slice: &[u8] = unsafe { std::slice::from_raw_parts((*res).data_ptr,(*res).data_len) };
 
-        let slice: &[u8] = unsafe { std::slice::from_raw_parts(res.data_ptr, res.data_len) };
+        unsafe {
+            ((*res).destroyer)(res);
+        }
         Vec::from(slice)
     }
 

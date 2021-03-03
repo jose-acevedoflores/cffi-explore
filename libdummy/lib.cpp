@@ -36,7 +36,13 @@ void shutdown(){
     lib = nullptr;
 }
 
-FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
+void m_des(void* buf) {
+    std::cout << "destroy the buf" << std::endl;
+    std::cout << "destroy the buf2" << std::endl;
+
+}
+
+FFIBuf* send_inline(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
 
     std::vector<char> vec;
@@ -44,8 +50,16 @@ FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
 
 //    std::string sfvec(vec.begin(), vec.end());
 //    std::cout << "c side vec size " << vec.size() << " and str was '"<< sfvec <<"'"<< std::endl;
-    return FFIBuf {
-        .data_ptr = vec.data(),
-        .data_len = vec.size(),
-    };
+
+    auto ptr = (FFIBuf*) malloc(sizeof(FFIBuf));
+
+    ptr->data_ptr = vec.data();
+    ptr->data_len = vec.size();
+    ptr->cb = m_des;
+
+    return ptr;
+//    return FFIBuf {
+//        .data_ptr = vec.data(),
+//        .data_len = vec.size(),
+//    };
 }

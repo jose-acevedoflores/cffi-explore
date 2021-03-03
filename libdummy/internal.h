@@ -24,9 +24,12 @@ class InternalHandler {
 
     std::string onSendInline(const std::string& src, const char* arg, size_t argLen){
         std::cout << "C side onSendInline " << src << std::endl;
-        FFIBuf val = p->callback_with_return(p->cbSelf, src.c_str(), arg, argLen);
+        FFIBuf* val = p->callback_with_return(p->cbSelf, src.c_str(), arg, argLen);
 
-        auto s = std::string(val.data_ptr, val.data_len);
+        auto s = std::string(val->data_ptr, val->data_len);
+
+        val->cb( (void*) val);
+
         return s;
     }
 };
