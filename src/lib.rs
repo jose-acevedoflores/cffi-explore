@@ -336,10 +336,17 @@ impl LibDummy {
         }
         let slice: &[u8] = unsafe { std::slice::from_raw_parts((*res).data_ptr,(*res).data_len) };
 
+        let mut dst: Vec<u8> = Vec::with_capacity(slice.len());
+
+        for b in slice {
+            dst.push(b.clone());
+        }
+        // dst.as_mut_slice().copy_from_slice(slice);
+
         unsafe {
             ((*res).destroyer)(res);
         }
-        Vec::from(slice)
+        dst
     }
 
     /// Register a handler on the given `dest`
