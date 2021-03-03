@@ -2,6 +2,8 @@
 #include <chrono>
 
 #include "MyLibrary.h"
+const static bool ON_SEND_INLINE = true;
+const static bool ON_SEND = false;
 
 MyLibrary::~MyLibrary() {
     done = true;
@@ -22,7 +24,7 @@ MyLibrary::~MyLibrary() {
 
 void MyLibrary::startIncrThread(InternalHandler * h, const std::string& dest) {
     //Start thread
-    incrThreads.emplace_back( std::thread( &MyLibrary::incr, this, h, std::string(dest) ) );
+    incrThreads.emplace_back( std::thread( &MyLibrary::incr, this, h, std::string(dest), ON_SEND) );
 }
 
 int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
@@ -35,6 +37,25 @@ int MyLibrary::send(const std::string& dest, const char* arg, size_t argLen){
     if(search != handlers.end()){
         search->second->onSend(dest, arg, argLen);
         startIncrThread(search->second, dest);
+        return 0;
+    } else {
+        std::cout << "handler for "<<dest << " was not found" << std::endl;
+        return -1;
+    }
+}
+
+
+int MyLibrary::send_inline(const std::string& dest, const char* arg, size_t argLen, std::vector<char> &vec) {
+
+    //Lock before accessing handlers map.
+    std::shared_lock guard(handlersGuard);
+
+
+    auto search = handlers.find(dest);
+    if(search != handlers.end()) {
+        auto t = std::thread( &MyLibrary::incr, this, search->second, std::string(dest), ON_SEND_INLINE);
+        //NOTE: this is just for testing, if there is no handler registered this locks for 20 secs;
+        t.join();
         return 0;
     } else {
         std::cout << "handler for "<<dest << " was not found" << std::endl;
@@ -83,7 +104,7 @@ int MyLibrary::cancel(const std::string& dest, InternalHandler * internal_handle
     return -1;
 }
 
-void MyLibrary::incr(InternalHandler * h, const std::string& dest) {
+void MyLibrary::incr(InternalHandler * h, const std::string& dest, bool isInlineSend) {
     int b = 0;
     auto rec = std::string("recurrent from c side: ");
     while( b < 20 ){
@@ -101,7 +122,11 @@ void MyLibrary::incr(InternalHandler * h, const std::string& dest) {
         std::shared_lock guard(handlersGuard);
 
         if(handlers.find(dest) != handlers.end()){
-            h->onSend(dest, rec.c_str(), rec.length());
+            if (isInlineSend){
+                h->onSendInline(dest, rec.c_str(), rec.length());
+            } else {
+                h->onSend(dest, rec.c_str(), rec.length());
+            }
         } else {
             std::cout<< "ON THE C SIDE loop '" << dest <<"' removed" << std::endl;
             return;

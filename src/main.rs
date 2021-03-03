@@ -14,6 +14,16 @@ impl cffi_explore::OnSend for UserSpaceHandler {
         let mut inner = self.val.write().unwrap();
         *inner = Some(String::from_utf8(arg.to_vec()).unwrap());
     }
+
+    fn on_send_inline(&mut self, src: &str, arg: &[u8]) -> Vec<u8> {
+        let id = thread::current().id();
+        println!("User space 'on_send_inline' - '{}' tid: {:?} ", src, id);
+
+        let r = String::from_utf8(arg.to_vec()).unwrap();
+
+        let r = format!("echoed: {}", r);
+        r.into_bytes()
+    }
 }
 
 fn setup_other_handler(lib: &LibDummy) -> UserSpaceWrapper {
@@ -48,6 +58,11 @@ fn main() {
             thread::sleep(two_secs);
             println!("We got it {:?}", &d);
         }
+
+        let vec = lib.send_inline("here", String::from("asd").as_bytes());
+        let res = String::from_utf8(vec).unwrap();
+        println!("Got Result Inline - '{}'!!", res);
+
         lib.cancel("here", h);
 
         thread::sleep(two_secs);

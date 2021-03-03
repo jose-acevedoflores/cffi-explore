@@ -3,6 +3,7 @@
 //
 
 #include <string>
+#include <vector>
 
 #include "MyLibrary.h"
 #include "internal.h"
@@ -33,4 +34,14 @@ void shutdown(){
     std::cout << "Shutdown libdummy" << std::endl;
     delete lib;
     lib = nullptr;
+}
+
+FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
+    auto s = std::string(dest);
+    std::vector<char> vec;
+    int result = lib->send_inline(s, arg, argLen, vec);
+    return FFIBuf {
+        .data_ptr = vec.data(),
+        .data_len = vec.size(),
+    };
 }
