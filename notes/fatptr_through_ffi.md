@@ -150,4 +150,6 @@ I figured, that shouldn't be that bad for my use case since that `RustSideHandle
 struct will NOT be accessed on the library side.
 
 ## Misc
-- [System V ABI](https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf)
+1. [System V ABI](https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf)
+2. [Swift ABI article](https://gankra.github.io/blah/swift-abi/)
+3. [this ffi bug](https://github.com/rust-lang/rust/issues/54341)

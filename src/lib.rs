@@ -106,6 +106,9 @@ impl UserSpaceWrapper {
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let ctx = unsafe { crate::ext::handler(dest.as_ptr(), ffi_obj) };
         //TODO: handler could return null so validate
+        if ctx == null() {
+            // free and return err
+        }
 
         UserSpaceWrapper {
             ffi_wrapper: ffi_obj,
