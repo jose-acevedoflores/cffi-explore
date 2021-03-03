@@ -236,11 +236,13 @@ mod ext {
         // with a RustSideHandler that has already been freed. As a reminder, a
         // RustSideHandler comes paired up with an FFICtx. Once the FFCtx is returned to the C via
         // 'cancel' the associated RustSideHandler is freed.
-        unsafe {
+        let data = unsafe {
             let dest = CStr::from_ptr(dest);
             let sl = std::slice::from_raw_parts(arg, arg_len);
-            (*(*rust_obj).opaque).on_send_inline(dest.to_str().unwrap(), sl);
-        }
+            (*(*rust_obj).opaque).on_send_inline(dest.to_str().unwrap(), sl)
+        };
+
+        println!("VEC FROM C SIDE SIZE INLINE {}", data.len());
         FFIBuf {
             data_ptr: null(),
             data_len: 0,

@@ -29,7 +29,7 @@ private:
     std::deque<std::thread> incrThreads;
     std::atomic<bool> done = false;
 
-    void incr(InternalHandler* h, const std::string& dest, bool isInlineSend);
+    void incr(InternalHandler* h, const std::string& dest, bool isInlineSend, std::vector<char> &vec);
 };
 
 #endif //DUMMY_MYLIBRARY_H
