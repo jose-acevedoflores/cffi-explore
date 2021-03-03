@@ -9,6 +9,7 @@ struct FFIBuf {
    const char* data_ptr;
    size_t data_len;
    destruct cb;
+   void* c_vec;
 };
 
 

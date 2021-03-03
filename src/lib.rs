@@ -229,8 +229,9 @@ mod ext {
 
         println!("DESTORY");
         unsafe {
-            let _ffibuf = std::boxed::Box::from_raw(done);
-
+            let ffibuf = std::boxed::Box::from_raw(done);
+            let p  = ffibuf.data_ptr as *mut u8;
+            Vec::from_raw_parts(p, ffibuf.data_len, ffibuf.data_len);
         }
 
     }
@@ -247,7 +248,7 @@ mod ext {
         // with a RustSideHandler that has already been freed. As a reminder, a
         // RustSideHandler comes paired up with an FFICtx. Once the FFCtx is returned to the C via
         // 'cancel' the associated RustSideHandler is freed.
-        let data = unsafe {
+        let mut data = unsafe {
             let dest = CStr::from_ptr(dest);
             let sl = std::slice::from_raw_parts(arg, arg_len);
             (*(*rust_obj).opaque).on_send_inline(dest.to_str().unwrap(), sl)
@@ -256,9 +257,12 @@ mod ext {
         println!("VEC FROM C SIDE SIZE INLINE {}", data.len());
 
         // let ptr =  data.as_ptr();
+        data.shrink_to_fit();
         let cnt = data.len();
-        let b = data.into_boxed_slice();
-        let ptr = b.as_ptr();
+        let ptr = data.as_mut_ptr();
+        std::mem::forget(data);
+        // let b = data.into_boxed_slice();
+        // let ptr = b.as_ptr_range().start;
         let fibuf = std::boxed::Box::new(FFIBuf{
             data_ptr: ptr,
             data_len: cnt,

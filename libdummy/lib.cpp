@@ -39,22 +39,30 @@ void shutdown(){
 void m_des(void* buf) {
     std::cout << "destroy the buf" << std::endl;
     std::cout << "destroy the buf2" << std::endl;
+    auto ffibuf = (FFIBuf*) buf;
+    delete reinterpret_cast<std::vector<char>*>(ffibuf->c_vec);
+    delete ffibuf;
+
+//    free(buf);
 
 }
 
 FFIBuf* send_inline(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
 
-    std::vector<char> vec;
-    int result = lib->send_inline(s, arg, argLen, vec);
+    auto vec = new std::vector<char>();
+    int result = lib->send_inline(s, arg, argLen, *vec);
 
 //    std::string sfvec(vec.begin(), vec.end());
 //    std::cout << "c side vec size " << vec.size() << " and str was '"<< sfvec <<"'"<< std::endl;
 
-    auto ptr = (FFIBuf*) malloc(sizeof(FFIBuf));
+    auto ptr = new FFIBuf();
 
-    ptr->data_ptr = vec.data();
-    ptr->data_len = vec.size();
+
+//    std::copy(vec.begin(), vec.end(), e);
+    ptr->data_ptr = vec->data();
+    ptr->data_len = vec->size();
+    ptr->c_vec = reinterpret_cast<void*>(vec);
     ptr->cb = m_des;
 
     return ptr;
