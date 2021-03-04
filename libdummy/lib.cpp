@@ -36,18 +36,18 @@ void shutdown(){
     lib = nullptr;
 }
 
-void m_des(void* buf) {
+void m_des(FFIBuf buf) {
     std::cout << "destroy the buf" << std::endl;
     std::cout << "destroy the buf2" << std::endl;
-    auto ffibuf = (FFIBuf*) buf;
-    delete reinterpret_cast<std::vector<char>*>(ffibuf->c_vec);
-    delete ffibuf;
+//    auto ffibuf = (FFIBuf*) buf;
+    delete reinterpret_cast<std::vector<char>*>(buf.c_vec);
+//    delete ffibuf;
 
 //    free(buf);
 
 }
 
-FFIBuf* send_inline(const char* dest, const char* arg, size_t argLen){
+FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
 
     auto vec = new std::vector<char>();
@@ -56,16 +56,25 @@ FFIBuf* send_inline(const char* dest, const char* arg, size_t argLen){
 //    std::string sfvec(vec.begin(), vec.end());
 //    std::cout << "c side vec size " << vec.size() << " and str was '"<< sfvec <<"'"<< std::endl;
 
-    auto ptr = new FFIBuf();
+//    auto ptr = new FFIBuf();
 
 
 //    std::copy(vec.begin(), vec.end(), e);
-    ptr->data_ptr = vec->data();
-    ptr->data_len = vec->size();
-    ptr->c_vec = reinterpret_cast<void*>(vec);
-    ptr->cb = m_des;
+//    ptr->data_ptr = vec->data();
+//    ptr->data_len = vec->size();
+//    ptr->c_vec = reinterpret_cast<void*>(vec);
+//    ptr->cb = m_des;
 
-    return ptr;
+    auto buf = FFIBuf {
+        .data_ptr = vec->data(),
+        .data_len = vec->size(),
+        .c_vec = reinterpret_cast<void*>(vec),
+        .cb = m_des
+    };
+
+    return buf;
+
+//    return ptr;
 //    return FFIBuf {
 //        .data_ptr = vec.data(),
 //        .data_len = vec.size(),

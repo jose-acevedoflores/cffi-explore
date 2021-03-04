@@ -124,6 +124,7 @@ mod ext {
     use crate::OnSend;
     use std::ffi::{CStr, c_void};
     use std::os::raw::{c_char, c_int, c_uchar};
+    use std::ptr::null;
 
     /// Struct introduced in order to send the fat ptr that represents an OnSend trait object
     /// through ffi.
@@ -137,8 +138,8 @@ mod ext {
     pub struct FFIBuf {
         pub data_ptr: *const c_uchar,
         pub data_len: usize,
-        pub destroyer: extern "C" fn( *mut FFIBuf ),
-        // pub op:
+        pub destroyer: extern "C" fn( FFIBuf ),
+        c_vec: *const c_void,
     }
 
     /// Structure defined by the libdummy header for data exchange.
@@ -147,7 +148,7 @@ mod ext {
         /// Function pointer used by the library to reach back
         pub callback: extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize),
         pub callback_with_return:
-            extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize) -> *const FFIBuf,
+            extern "C" fn(*mut RustSideHandler, *const c_char, *const c_uchar, usize) -> FFIBuf,
         /// Entity that is meant to handle the callback. This field will be passed in as the
         /// first arg of the fn ptr above.
         pub self_rust_side: *mut RustSideHandler,
@@ -182,7 +183,7 @@ mod ext {
         ///
         /// Returns an int where '>=0' is success
         ///
-        pub fn send_inline(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> *mut FFIBuf;
+        pub fn send_inline(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> FFIBuf;
 
         /// Register a handler on the given `dest`
         /// # Arguments
@@ -225,13 +226,13 @@ mod ext {
         }
     }
 
-    pub extern "C" fn destroy_buf(done: *mut FFIBuf){
+    pub extern "C" fn destroy_buf(done: FFIBuf){
 
         println!("DESTORY");
         unsafe {
-            let ffibuf = std::boxed::Box::from_raw(done);
-            let p  = ffibuf.data_ptr as *mut u8;
-            Vec::from_raw_parts(p, ffibuf.data_len, ffibuf.data_len);
+            // let ffibuf = std::boxed::Box::from_raw(done);
+            let p  = done.data_ptr as *mut u8;
+            Vec::from_raw_parts(p, done.data_len, done.data_len);
         }
 
     }
@@ -242,7 +243,7 @@ mod ext {
         dest: *const c_char,
         arg: *const c_uchar,
         arg_len: usize,
-    ) -> *const FFIBuf {
+    ) -> FFIBuf {
         //Safety: This is the most critical unsafe block.
         // This block assumes the C library honors its contract and will NOT trigger this callback
         // with a RustSideHandler that has already been freed. As a reminder, a
@@ -263,16 +264,17 @@ mod ext {
         std::mem::forget(data);
         // let b = data.into_boxed_slice();
         // let ptr = b.as_ptr_range().start;
-        let fibuf = std::boxed::Box::new(FFIBuf{
+        let o = FFIBuf{
             data_ptr: ptr,
             data_len: cnt,
-            destroyer: destroy_buf
+            destroyer: destroy_buf,
+            c_vec: null(),
 
-        });
+        };
 
-        let ret = std::boxed::Box::into_raw(fibuf) as *const FFIBuf;
+        // let ret = std::boxed::Box::into_raw(fibuf) as *const FFIBuf;
 
-        ret
+        o
         // FFIBuf {
         //     data_ptr: ptr,
         //     data_len: cnt,
@@ -331,21 +333,19 @@ impl LibDummy {
 
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let res = unsafe { crate::ext::send_inline(dest.as_ptr(), data.as_ptr(), data.len()) };
-        unsafe {
-            println!("WE GOT SOMETHING {}", (*res).data_len);
-        }
-        let slice: &[u8] = unsafe { std::slice::from_raw_parts((*res).data_ptr,(*res).data_len) };
+
+        println!("WE GOT SOMETHING {}", res.data_len);
+        let slice: &[u8] = unsafe { std::slice::from_raw_parts(res.data_ptr, res.data_len) };
 
         let mut dst: Vec<u8> = Vec::with_capacity(slice.len());
 
         for b in slice {
             dst.push(b.clone());
         }
+        // TODO BENCHMARK THIS
         // dst.as_mut_slice().copy_from_slice(slice);
 
-        unsafe {
-            ((*res).destroyer)(res);
-        }
+        (res.destroyer)(res);
         dst
     }
 
