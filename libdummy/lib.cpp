@@ -68,8 +68,8 @@ FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
     auto buf = FFIBuf {
         .data_ptr = vec->data(),
         .data_len = vec->size(),
-        .c_vec = reinterpret_cast<void*>(vec),
-        .cb = m_des
+        .cb = m_des,
+        .c_vec = reinterpret_cast<void*>(vec)
     };
 
     return buf;
