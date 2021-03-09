@@ -2,10 +2,13 @@
 //! Provide a safe abstraction over libdummy
 //!
 use crate::ext::{FFICtx, FFIWrapper, RustSideHandler};
+pub use crate::my_lib_errors::MyError;
+pub use crate::my_lib_errors::MyLibResult;
 use std::ffi::CString;
 use std::ptr::null;
 #[cfg(feature = "with_lib_checks")]
 use std::sync::RwLock;
+mod my_lib_errors;
 
 #[cfg(feature = "with_lib_checks")]
 #[macro_use]
@@ -43,8 +46,9 @@ pub fn cancel_call(dest: &str, ctx: *const FFICtx) -> i32 {
 }
 
 pub trait OnSend {
-    fn on_send(&mut self, src: &str, arg: &[u8]);
-    fn on_send_inline(&mut self, src: &str, arg: &[u8]) -> Vec<u8>;
+    //both of these methods need to be '&self' because the c side can reach back from multiple threads.
+    fn on_send(&self, src: &str, arg: &[u8]);
+    fn on_send_inline(&self, src: &str, arg: &[u8]) -> Vec<u8>;
 }
 
 /// Keep track of a given `handle: Box<dyn OnSend + Sync>` registered via the [`handler`] function.
@@ -92,7 +96,7 @@ impl UserSpaceWrapper {
         res >= 0
     }
 
-    fn new(dest: &str, handle: Box<dyn OnSend + Sync>) -> Self {
+    fn new(dest: &str, handle: Box<dyn OnSend + Sync>) -> MyLibResult<Self> {
         let handle = std::boxed::Box::into_raw(handle);
         let rust_side_obj = Box::new(RustSideHandler { opaque: handle });
 
@@ -103,18 +107,19 @@ impl UserSpaceWrapper {
         });
 
         let ffi_obj = std::boxed::Box::into_raw(ffi_obj);
-        let dest = CString::new(dest).unwrap();
+        let c_dest = CString::new(dest).unwrap();
 
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
-        let ctx = unsafe { crate::ext::handler(dest.as_ptr(), ffi_obj) };
-        //TODO: handler could return null so validate
+        let ctx = unsafe { crate::ext::handler(c_dest.as_ptr(), ffi_obj) };
         if ctx == null() {
-            // free and return err
-        }
-
-        UserSpaceWrapper {
-            ffi_wrapper: ffi_obj,
-            ctx,
+            Err(MyError::FailedToRegister {
+                dest: dest.to_string(),
+            })
+        } else {
+            Ok(UserSpaceWrapper {
+                ffi_wrapper: ffi_obj,
+                ctx,
+            })
         }
     }
 }
@@ -122,7 +127,7 @@ impl UserSpaceWrapper {
 /// Private module that encapsulates all the extern parts of the library.
 mod ext {
     use crate::OnSend;
-    use std::ffi::{CStr, c_void};
+    use std::ffi::{c_void, CStr};
     use std::os::raw::{c_char, c_int, c_uchar};
     use std::ptr::null;
 
@@ -138,7 +143,7 @@ mod ext {
     pub struct FFIBuf {
         pub data_ptr: *const c_uchar,
         pub data_len: usize,
-        pub destroyer: extern "C" fn( FFIBuf ),
+        pub destroyer: extern "C" fn(FFIBuf),
         c_vec: *const c_void,
     }
 
@@ -226,15 +231,13 @@ mod ext {
         }
     }
 
-    pub extern "C" fn destroy_buf(done: FFIBuf){
-
+    pub extern "C" fn destroy_buf(done: FFIBuf) {
         println!("DESTORY");
         unsafe {
             // let ffibuf = std::boxed::Box::from_raw(done);
-            let p  = done.data_ptr as *mut u8;
+            let p = done.data_ptr as *mut u8;
             Vec::from_raw_parts(p, done.data_len, done.data_len);
         }
-
     }
 
     /// Function callback used by the library to reach back to rust.
@@ -261,24 +264,15 @@ mod ext {
         data.shrink_to_fit();
         let cnt = data.len();
         let ptr = data.as_mut_ptr();
+        // IMPORTANT: we forget here because we assume c will play nice and give the vector back
+        // when it's done (see 'destroy_buf') above.
         std::mem::forget(data);
-        // let b = data.into_boxed_slice();
-        // let ptr = b.as_ptr_range().start;
-        let o = FFIBuf{
+        FFIBuf {
             data_ptr: ptr,
             data_len: cnt,
             destroyer: destroy_buf,
             c_vec: null(),
-
-        };
-
-        // let ret = std::boxed::Box::into_raw(fibuf) as *const FFIBuf;
-
-        o
-        // FFIBuf {
-        //     data_ptr: ptr,
-        //     data_len: cnt,
-        // }
+        }
     }
 }
 
@@ -355,7 +349,11 @@ impl LibDummy {
     /// * `handle` - handler data to be used by libdummy
     ///
     /// Returns a context struct that corresponds to the given `ffi_obj`
-    pub fn handler(&self, dest: &str, handle: Box<dyn OnSend + Sync>) -> UserSpaceWrapper {
+    pub fn handler(
+        &self,
+        dest: &str,
+        handle: Box<dyn OnSend + Sync>,
+    ) -> MyLibResult<UserSpaceWrapper> {
         UserSpaceWrapper::new(dest, handle)
     }
 
@@ -398,21 +396,21 @@ mod tests {
 
     struct TestStruct;
     impl OnSend for TestStruct {
-        fn on_send(&mut self, _src: &str, _arg: &[u8]) {
+        fn on_send(&self, _src: &str, _arg: &[u8]) {
             unimplemented!()
         }
 
-        fn on_send_inline(&mut self, _src: &str, _arg: &[u8]) -> Vec<u8> {
+        fn on_send_inline(&self, _src: &str, _arg: &[u8]) -> Vec<u8> {
             unimplemented!()
         }
     }
     struct TestStruct2;
     impl OnSend for TestStruct2 {
-        fn on_send(&mut self, _src: &str, _arg: &[u8]) {
+        fn on_send(&self, _src: &str, _arg: &[u8]) {
             unimplemented!()
         }
 
-        fn on_send_inline(&mut self, _src: &str, _arg: &[u8]) -> Vec<u8> {
+        fn on_send_inline(&self, _src: &str, _arg: &[u8]) -> Vec<u8> {
             unimplemented!()
         }
     }
