@@ -9,6 +9,7 @@ use std::ptr::null;
 #[cfg(feature = "with_lib_checks")]
 use std::sync::RwLock;
 mod my_lib_errors;
+use log::debug;
 
 #[cfg(feature = "with_lib_checks")]
 #[macro_use]
@@ -33,7 +34,7 @@ pub fn cancel_call(dest: &str, ctx: *const FFICtx) -> i32 {
     } else {
         // This means the library was shutdown, but we had a ctx that was not freed.
         // This will proceed to free the boxes.
-        println!("delete after shutdown");
+        info!("delete after shutdown");
         -1
     }
 }
@@ -66,7 +67,7 @@ impl Drop for UserSpaceWrapper {
         // and it would be a memory leak. In the real library that won't be a problem.
 
         let res = self.delete("");
-        println!("dropped UserSpaceWrapper, ctx freed:'{}'", res);
+        debug!("dropped UserSpaceWrapper, ctx freed:'{}'", res);
     }
 }
 
@@ -127,6 +128,7 @@ impl UserSpaceWrapper {
 /// Private module that encapsulates all the extern parts of the library.
 mod ext {
     use crate::OnSend;
+    use log::debug;
     use std::ffi::{c_void, CStr};
     use std::os::raw::{c_char, c_int, c_uchar};
     use std::ptr::null;
@@ -178,7 +180,7 @@ mod ext {
         ///
         /// Returns an int where '>=0' is success
         ///
-        pub fn send(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
+        pub fn send_async(dest: *const c_char, arg: *const c_uchar, arg_len: usize) -> c_int;
 
         /// Sends a series of bytes to the given `dest`
         /// # Arguments
@@ -232,7 +234,7 @@ mod ext {
     }
 
     pub extern "C" fn destroy_buf(done: FFIBuf) {
-        println!("DESTORY");
+        debug!("DESTORY");
         unsafe {
             // let ffibuf = std::boxed::Box::from_raw(done);
             let p = done.data_ptr as *mut u8;
@@ -258,7 +260,7 @@ mod ext {
             (*(*rust_obj).opaque).on_send_inline(dest.to_str().unwrap(), sl)
         };
 
-        println!("VEC FROM C SIDE SIZE INLINE {}", data.len());
+        debug!("VEC FROM C SIDE SIZE INLINE {}", data.len());
 
         // let ptr =  data.as_ptr();
         data.shrink_to_fit();
@@ -310,7 +312,7 @@ impl LibDummy {
         let dest = CString::new(dest).unwrap();
 
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
-        let res = unsafe { crate::ext::send(dest.as_ptr(), data.as_ptr(), data.len()) };
+        let res = unsafe { crate::ext::send_async(dest.as_ptr(), data.as_ptr(), data.len()) };
 
         res >= 0
     }
@@ -328,7 +330,7 @@ impl LibDummy {
         //Safety: calling extern function. This is valid as long as shutdown hasn't been called
         let res = unsafe { crate::ext::send_inline(dest.as_ptr(), data.as_ptr(), data.len()) };
 
-        println!("WE GOT SOMETHING {}", res.data_len);
+        debug!("WE GOT SOMETHING {}", res.data_len);
         let slice: &[u8] = unsafe { std::slice::from_raw_parts(res.data_ptr, res.data_len) };
 
         let mut dst: Vec<u8> = Vec::with_capacity(slice.len());

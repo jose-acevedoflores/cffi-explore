@@ -3,6 +3,8 @@ use cffi_explore::{LibDummy, UserSpaceWrapper};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+mod utils;
+
 const HANDLER_FOR_TEST: &str = "here42";
 const ECHO_PREFIX: &str = "echoed: ";
 
@@ -38,6 +40,7 @@ fn setup_handler(lib: &LibDummy) -> (UserSpaceWrapper, Arc<RwLock<Option<String>
 
 #[test]
 fn test_send_inline() {
+    utils::init_log();
     let lib = cffi_explore::start_lib().unwrap();
     {
         let (_user, _msg_rcvd) = setup_handler(&lib);

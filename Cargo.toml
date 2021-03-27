@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
+log="0.4.14"
+env_logger = "0.8.3"
 
 [features]
 # This flag is used to make the exposed 'LibDummy' thread safe by introducing static mut checks performed

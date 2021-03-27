@@ -3,6 +3,8 @@ use cffi_explore::{LibDummy, UserSpaceWrapper};
 use std::sync::{Arc, RwLock};
 use std::{thread, time};
 
+mod utils;
+
 const CIEN_MILLIS: time::Duration = time::Duration::from_millis(100);
 const HANDLER_FOR_TEST: &str = "here12";
 
@@ -56,12 +58,14 @@ fn wait_on_result(msg_rcvd: &Arc<RwLock<Option<String>>>) {
 
 #[test]
 fn start_lib() {
+    utils::init_log();
     let lib = cffi_explore::start_lib().unwrap();
 
     {
         let (_user, msg_rcvd) = setup_handler(&lib);
         let s = String::from("ledata to send");
-        lib.send(HANDLER_FOR_TEST, s.as_bytes());
+        let res = lib.send(HANDLER_FOR_TEST, s.as_bytes());
+        assert!(res);
         wait_on_result(&msg_rcvd);
         let msg = &*msg_rcvd.read().unwrap();
         assert_eq!(&s, msg.as_ref().unwrap())

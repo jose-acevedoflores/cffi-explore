@@ -11,8 +11,9 @@
 
 auto lib = new MyLibrary();
 
-int send(const char* dest, const char* arg, size_t argLen){
+int send_async(const char* dest, const char* arg, size_t argLen){
     auto s = std::string(dest);
+    std::cout << "send " << s <<std::endl;
     return lib->send(s, arg, argLen);
 }
 

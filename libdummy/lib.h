@@ -40,7 +40,7 @@ extern "C"
 {
 #endif
 
-    int send(const char* dest, const char* arg, size_t argLen);
+    int send_async(const char* dest, const char* arg, size_t argLen);
     FFIBuf send_inline(const char* dest, const char* arg, size_t argLen);
     void m_des(void* buf);
 
