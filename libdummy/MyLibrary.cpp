@@ -1,5 +1,6 @@
 #include <iostream>
 #include <chrono>
+#include <string>
 
 #include "MyLibrary.h"
 const static bool ON_SEND_INLINE = true;

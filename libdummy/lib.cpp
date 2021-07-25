@@ -50,10 +50,10 @@ FFIBuf send_inline(const char* dest, const char* arg, size_t argLen){
     int result = lib->send_inline(s, arg, argLen, *vec);
 
     auto buf = FFIBuf {
-        .data_ptr = vec->data(),
-        .data_len = vec->size(),
-        .cb = m_des,
-        .c_vec = reinterpret_cast<void*>(vec)
+         vec->data(),
+         vec->size(),
+         m_des,
+         reinterpret_cast<void*>(vec)
     };
 
     return buf;
